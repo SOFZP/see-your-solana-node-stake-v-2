@@ -17,5 +17,5 @@ or add ANY identity + cluster (-um OR -ut) + sorting (ColumnNumber:Order)
 
 for example `./CVK-see-your-stake.bash <NODE_IDENTITY> -um 4:DESC 6:DESC`
 
-Example (my testnet stake) :
+Example :
 ![Example](/see-your-stake-v-2.png "example stakes")
