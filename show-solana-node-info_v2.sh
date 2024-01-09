@@ -1,0 +1,2008 @@
+#!/bin/bash
+# Solana Nodes CLI Monitoring Script
+# 
+# Documentation & actual releases are here:
+# https://github.com/SOFZP/show-solana-node-info_v2
+#
+# Stand with Ukraine!
+#
+# ❇️❇️❇️ Say thanks to author (SOL): ❇️❇️❇️
+# BrnMNcFz6EzjZsQM8xNbrTsJE88fyXU2X6Crar9QPpsK / cryptovik.sol
+#
+
+pushd `dirname ${0}` > /dev/null || exit 1
+
+
+# colors
+NOCOLOR='\033[0m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+ORANGE='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+LIGHTGRAY='\033[0;37m'
+DARKGRAY='\033[1;30m'
+LIGHTRED='\033[1;31m'
+LIGHTGREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+LIGHTBLUE='\033[1;34m'
+LIGHTPURPLE='\033[1;35m'
+LIGHTCYAN='\033[1;36m'
+
+UNDERLINE='' #'\033[4m'
+
+
+_work_done=0
+
+SERVER_TIME_ZONE=`timedatectl | grep "Time zone" | sed 's/  */ /g' | sed 's/ Time zone://g'`
+
+
+
+
+function getRandomRPC () {
+	local DEFAULT_CLUSTER1='-ul'
+	local SOLANA_CLUSTER1=' '${1:-$DEFAULT_CLUSTER1}' '
+
+	echo $(solana ${SOLANA_CLUSTER1} gossip --output json-compact | jq -r .[].rpcHost | sed 's/null//g' | sed '/^$/d' | shuf -n 1 | awk '{print "--url https://"$1}')
+}
+
+function rotateKnownRPC () {
+
+	local testRPC1=' -ut '
+	local testRPC2=' -ut '
+	local testRPC3='--url https://testnet.rpcpool.com/'
+	local testRPC4='--url http://testnet.solana.margus.one/'
+	local testRPC5='--url https://entrypoint.testnet.solana.sergo.dev'
+	
+	local mainRPC1=' -um '
+	local mainRPC2='--url https://rpc.ankr.com/solana'
+	local mainRPC3='--url https://ssc-dao.genesysgo.net/'
+	local mainRPC4='--url https://solana-mainnet-rpc.allthatnode.com/'
+	local mainRPC5='--url https://mainnet.rpcpool.com/'
+	
+	local fcl="$1"
+
+	if [[ "$fcl" = "$testRPC1" ]]; then
+      echo "$testRPC2"
+    elif [[ "$fcl" = "$testRPC2" ]]; then
+      echo "$testRPC3"
+    elif [[ "$fcl" = "$testRPC3" ]]; then
+      echo "$testRPC4"
+    elif [[ "$fcl" = "$testRPC4" ]]; then
+      echo "$testRPC1"
+    fi
+	
+	if [[ "$fcl" = "$mainRPC1" ]]; then
+      echo "$mainRPC2"
+    elif [[ "$fcl" = "$mainRPC2" ]]; then
+      echo "$mainRPC3"
+    elif [[ "$fcl" = "$mainRPC3" ]]; then
+      echo "$mainRPC4"
+    elif [[ "$fcl" = "$mainRPC4" ]]; then
+      echo "$mainRPC1"
+    fi
+}
+
+
+function solana_price() {
+
+PRICE=`curl -g -s 'https://data.gateapi.io/api2/1/ticker/sol_usdt' --compressed | jq -r @json 2> /dev/null | jq -r '.last' | awk '{printf("%.2f\n",$1)}'  2> /dev/null`
+
+PERCENT=`curl -g -s 'https://data.gateapi.io/api2/1/ticker/sol_usdt' --compressed | jq -r @json 2> /dev/null | jq -r '.percentChange' | awk '{printf("%.2f\n",$1)}'  2> /dev/null`
+
+#if [[ $PRICE!="null" ]]; then
+	echo -e "${PURPLE}${PRICE:-Cannot see price now}$ | ${PERCENT:-}% ${NOCOLOR}"
+#else
+#	echo ""
+#fi
+
+}
+
+
+
+function check_key () {
+	local KEY_TO_CHECK=${1:-}
+	
+	local STAKE_NAMES=(SELF_STAKE FOUNDATION TDS_FOUNDATION SECRET_STAKE MARINADE MARINADE2 SOCEAN_POOL JPOOL_POOL EVERSOL_STAKE BLAZESTAKE LIDO_POOL DAOPOOL JITO_POOL LAINE_POOL UNKNOWN_POOL ?ALAMEDA2 ?ALAMEDA3 ?ALAMEDA4 ?ALAMEDA5 ?ALAMEDA6 ?ALAMEDA7 ?ALAMEDA8 ?ALAMEDA9 ?ALAMEDA10 ?ALAMEDA11 ?ALAMEDA12 ?ALAMEDA13 ?ALAMEDA14 ?ALAMEDA15)
+	local STAKE_WTHDR=($NODE_WITHDRAW_AUTHORITY "4ZJhPQAgUseCsWhKvJLTmmRRUV74fdoTpQLNfKoekbPY" "mvines9iiHiQTysrwkJjGf2gb9Ex9jXJX8ns3qwf2kN" "EhYXq3ANp5nAerUpbSgd7VK2RRcxK1zNuSQ755G5Mtxx" "9eG63CdHjsfhHmobHgLtESGC8GabbmRcaSpHAZrtmhco" "4bZ6o3eUUNXhKuqjdCnCoPAoLgWiuLYixKaxoa8PpiKk" "AzZRvyyMHBm8EHEksWxq4ozFL7JxLMydCDMGhqM6BVck" "HbJTxftxnXgpePCshA8FubsRj9MW4kfPscfuUfn44fnt" "C4NeuptywfXuyWB9A7H7g5jHVDE8L6Nj2hS53tA71KPn" "6WecYymEARvjG5ZyqkrVQ6YkhPfujNzWpSPwNKXHCbV2" "W1ZQRwUfSkDKy2oefRBUWph82Vr2zg9txWMA8RQazN5" "BbyX1GwUNsfbcoWwnkZDo8sqGmwNDzs2765RpjyQ1pQb" "6iQKfEyhr3bZMotVkW6beNZz5CPAkiwvgV2CTje9pVSS" "AAbVVaokj2VSZCmSU5Uzmxi6mxrG1n6StW9mnaWwN6cv" "HXdYQ5gixrY2H6Y9gqsD8kPM2JQKSaRiohDQtLbZkRWE" "e6keeZrGmHMiQaFM3TAYvFz8HE3qtTFUSHsyqq5FEw7" "DYG1ooTxkLS5iHDkte2XK4QBrpHziDR6EEZg5VsqNpVo" "EcH12jxhrbhF6qHqRzWpZ8rZU3TjG3sX6F67zP61oDJG" "HKd8LdhjUyhp2z4kYgpJxc4pzKCCKR4yC14EFSLNENtw" "8g3YB8KxpWEAAvcjom5vSqxJAZczZBgB4pEgsssts86K" "2YcwVbKx9L25Jpaj2vfWSXD5UKugZumWjzEe6suBUJi2" "DU5XJS2Cm8ftMmi5eZZJg8nkgx1hnZ3nT5sPU3GzV1fo" "7VMTVroogF6GhVunnUWF9hX8JiXqPHiZoG3VKAe64Ckt" "GunPZHAJc5DH8qARPz8x6UXAsoR3NDadFYs3bxtMZsvg" "7hbKGnBZEFF3Bwd9HFetDkLDHXycjvCATFUnj1nEzV85" "7dPqBYywCgLmjuHmexrEJLTCuoFpEUEf31Mjkjhz15wv" "5LJ93G4SQh9GiewTQJNAu6X9sQ1VVyrpCAgbQsRSgn22" "21uFTR9S5LptdR2tBxVeG1KAsKXB7tESqQVT8KRU7Vnj" "F5U6ac2vLzv3pYsxPVPYhhvxZY7u2WJMQEk81E3keMhX")
+	
+	for j in ${!STAKE_WTHDR[@]}; do
+		if [[ "${KEY_TO_CHECK}" == "${STAKE_WTHDR[$j]}" ]]; then
+			RETURN_INFO+=${STAKE_NAMES[$j]}
+		fi
+	done
+	
+	if [[ "$RETURN_INFO" == "" ]]; then
+		RETURN_INFO="\t"
+	fi
+	
+	echo $RETURN_INFO
+}
+
+declare -A data
+
+function check_key_pair () {
+	local DONE_STAKES_REF=(${1:-""})
+	local KEY_S_TO_CHECK=$(echo ${2:-} | cut -d'+' -f1)
+    local KEY_W_TO_CHECK=$(echo ${2:-} | cut -d'+' -f2)
+	
+	local dupl="false"
+	for y in ${!DONE_STAKES_REF[@]}; do
+        if [[ "${KEY_S_TO_CHECK}" == "${DONE_STAKES_REF[$y]}" ]]; then
+            dupl="true"
+        fi
+        if [[ "${KEY_W_TO_CHECK}" == "${DONE_STAKES_REF[$y]}" ]]; then
+            dupl="true"
+        fi
+    done
+	if [[ "$dupl" == "true" ]]; then
+		echo ""
+		exit 1
+	fi
+
+	local STAKE_AUTH_NAMES=(MAR_NATIVE_1 MAR_NATIVE_2)
+	local STAKE_AUTHORITY=("stWirqFCf2Uts1JBL1Jsd3r6VBWhgnpdPxCTe1MFjrq" "ex9CfkBZZd6Nv9XdnoDmmB45ymbu4arXVk7g5pWnt3N")
+	
+	local STAKE_NAMES=(SELF_STAKE FOUNDATION TDS_FOUNDATION SECRET_STAKE MARINADE MARINADE2 SOCEAN_POOL JPOOL_POOL EVERSOL_STAKE BLAZESTAKE LIDO_POOL DAOPOOL JITO_POOL LAINE_POOL UNKNOWN_POOL ?ALAMEDA2 ?ALAMEDA3 ?ALAMEDA4 ?ALAMEDA5 ?ALAMEDA6 ?ALAMEDA7 ?ALAMEDA8 ?ALAMEDA9 ?ALAMEDA10 ?ALAMEDA11 ?ALAMEDA12 ?ALAMEDA13 ?ALAMEDA14 ?ALAMEDA15)
+	local STAKE_WTHDR=($NODE_WITHDRAW_AUTHORITY "4ZJhPQAgUseCsWhKvJLTmmRRUV74fdoTpQLNfKoekbPY" "mvines9iiHiQTysrwkJjGf2gb9Ex9jXJX8ns3qwf2kN" "EhYXq3ANp5nAerUpbSgd7VK2RRcxK1zNuSQ755G5Mtxx" "9eG63CdHjsfhHmobHgLtESGC8GabbmRcaSpHAZrtmhco" "4bZ6o3eUUNXhKuqjdCnCoPAoLgWiuLYixKaxoa8PpiKk" "AzZRvyyMHBm8EHEksWxq4ozFL7JxLMydCDMGhqM6BVck" "HbJTxftxnXgpePCshA8FubsRj9MW4kfPscfuUfn44fnt" "C4NeuptywfXuyWB9A7H7g5jHVDE8L6Nj2hS53tA71KPn" "6WecYymEARvjG5ZyqkrVQ6YkhPfujNzWpSPwNKXHCbV2" "W1ZQRwUfSkDKy2oefRBUWph82Vr2zg9txWMA8RQazN5" "BbyX1GwUNsfbcoWwnkZDo8sqGmwNDzs2765RpjyQ1pQb" "6iQKfEyhr3bZMotVkW6beNZz5CPAkiwvgV2CTje9pVSS" "AAbVVaokj2VSZCmSU5Uzmxi6mxrG1n6StW9mnaWwN6cv" "HXdYQ5gixrY2H6Y9gqsD8kPM2JQKSaRiohDQtLbZkRWE" "e6keeZrGmHMiQaFM3TAYvFz8HE3qtTFUSHsyqq5FEw7" "DYG1ooTxkLS5iHDkte2XK4QBrpHziDR6EEZg5VsqNpVo" "EcH12jxhrbhF6qHqRzWpZ8rZU3TjG3sX6F67zP61oDJG" "HKd8LdhjUyhp2z4kYgpJxc4pzKCCKR4yC14EFSLNENtw" "8g3YB8KxpWEAAvcjom5vSqxJAZczZBgB4pEgsssts86K" "2YcwVbKx9L25Jpaj2vfWSXD5UKugZumWjzEe6suBUJi2" "DU5XJS2Cm8ftMmi5eZZJg8nkgx1hnZ3nT5sPU3GzV1fo" "7VMTVroogF6GhVunnUWF9hX8JiXqPHiZoG3VKAe64Ckt" "GunPZHAJc5DH8qARPz8x6UXAsoR3NDadFYs3bxtMZsvg" "7hbKGnBZEFF3Bwd9HFetDkLDHXycjvCATFUnj1nEzV85" "7dPqBYywCgLmjuHmexrEJLTCuoFpEUEf31Mjkjhz15wv" "5LJ93G4SQh9GiewTQJNAu6X9sQ1VVyrpCAgbQsRSgn22" "21uFTR9S5LptdR2tBxVeG1KAsKXB7tESqQVT8KRU7Vnj" "F5U6ac2vLzv3pYsxPVPYhhvxZY7u2WJMQEk81E3keMhX")
+	
+	FOUND_S="W"
+	KEY_RESULT="\t"
+	
+	for j in ${!STAKE_AUTHORITY[@]}; do
+		if [[ "${KEY_S_TO_CHECK}" == "${STAKE_AUTHORITY[$j]}" ]]; then
+			RETURN_INFO=${STAKE_AUTH_NAMES[$j]}
+			FOUND_S="S"
+			KEY_RESULT="${KEY_S_TO_CHECK}"
+			DONE_STAKES_TO_ADD="$KEY_RESULT ${DONE_STAKES_REF[@]}"
+		fi
+	done
+
+	if [[ "$FOUND_S" == "W" ]]; then
+		for k in ${!STAKE_WTHDR[@]}; do
+			if [[ "${KEY_W_TO_CHECK}" == "${STAKE_WTHDR[$k]}" ]]; then
+				RETURN_INFO=${STAKE_NAMES[$k]}
+				KEY_RESULT="${KEY_W_TO_CHECK}"
+				DONE_STAKES_TO_ADD="$KEY_RESULT ${DONE_STAKES_REF[@]}"
+			fi
+		done
+	fi
+
+	if [[ "$RETURN_INFO" == "" ]]; then
+		RETURN_KEY_TYPE_NAME="$KEY_W_TO_CHECK W \t"
+	else
+		RETURN_KEY_TYPE_NAME="$KEY_RESULT $FOUND_S $RETURN_INFO"
+	fi
+
+	echo $RETURN_KEY_TYPE_NAME"^"${DONE_STAKES_TO_ADD:-"$KEY_W_TO_CHECK ${DONE_STAKES_REF[@]}"}
+}
+
+function sort_data() {
+    # Створення масиву, де ключ - номер рядка, значення - відповідний рядок для сортування
+    local sortable_data=()
+    for key in "${!data[@]}"; do
+        sortable_data+=("$key:${data[$key]}")
+    done
+
+    # Розбивка критеріїв сортування
+    local sort_criteria=()
+    for criterion in "$@"; do
+        IFS=':' read -r sort_column sort_order <<< "$criterion"
+        sort_criteria+=("-k$sort_column,$sort_column$([[ $sort_order == 'DESC' ]] && echo 'r')n")
+    done
+
+    # Сортування масиву за вказаними критеріями
+    sorted_data=$(echo "${sortable_data[@]}" | tr ' ' '\n' | sort -t':' "${sort_criteria[@]}")
+
+    # Виведення відсортованих даних у вигляді таблиці
+    for line in $sorted_data; do
+        IFS=':' read -r key value <<< "$line"
+        data[$key]=$value
+
+        # Розділення значення по двокрапці
+        IFS=':' read -r col1 col2 col3 col4 col5 <<< "${data[$key]}"
+
+        # Вручну форматуємо і виводимо рядок
+        formatted_output="${NOCOLOR}$key\t$col1\t$col2\t$col3\t\t${RED}$col4\t\t${GREEN}$col5${NOCOLOR}"
+        #formatted_output="$key\t$col1\t${LIGHTPURPLE}$col2\t${CYAN}$col3\t\t${RED}$col4\t\t${GREEN}$col5${NOCOLOR}"
+        echo -e "$formatted_output"
+    done
+}
+
+max_avg_credits=""
+average_avg_credits=""
+all_valid_stakebot_epochs=""
+function cluster_vote_credits_statistic() {
+	NUM_EPOCHS_TO_LOOK_BACK=${1:-15}  # Максимальна кількість епох для перегляду
+
+	max_avg_credits=-1
+	sum_avg_credits=0
+
+	for ((i=0; i<NUM_EPOCHS_TO_LOOK_BACK; i++)); do
+		CURRENT_EPOCH=$((THIS_EPOCH - i))
+
+		KYC_API_VERCEL_4=$(curl -s "https://kyc-api.vercel.app/api/validators/epoch-stats?cluster=${CLUSTER_NAME_FOR_API}&epoch=${CURRENT_EPOCH}")
+
+		if [[ $(echo "${KYC_API_VERCEL_4}" | jq -r '.stats.avg_vote_credits') != "null" ]]; then
+			AVG_CREDITS_FOR_THIS_EPOCH=$(echo "${KYC_API_VERCEL_4}" | jq -r '.stats.avg_vote_credits')
+
+			#echo "Epoch: ${CURRENT_EPOCH}, Avg Credits: ${AVG_CREDITS_FOR_THIS_EPOCH}"
+
+			# Оновлення максимального значення AVG_CREDITS_FOR_THIS_EPOCH
+			if (( $(echo "${AVG_CREDITS_FOR_THIS_EPOCH} > ${max_avg_credits}" | bc -l) )); then
+				max_avg_credits=${AVG_CREDITS_FOR_THIS_EPOCH}
+			fi
+
+			# Додати значення AVG_CREDITS_FOR_THIS_EPOCH до суми
+			sum_avg_credits=$(echo "${sum_avg_credits} + ${AVG_CREDITS_FOR_THIS_EPOCH}" | bc -l)
+			
+			rounded_value_grace=$(printf "%.0f" "$(echo "$AVG_CREDITS_FOR_THIS_EPOCH * 0.97" | bc)")
+			all_valid_stakebot_epochs="$all_valid_stakebot_epochs $rounded_value_grace"
+
+			num_valid_epochs=$((num_valid_epochs + 1))
+		fi
+	done
+
+	# Вивести найбільше значення та середнє значення
+	#echo "Max Avg Credits: ${max_avg_credits}"
+
+	if ((num_valid_epochs > 0)); then
+		average_avg_credits=$(echo "scale=2; ${sum_avg_credits} / ${num_valid_epochs}" | bc -l)
+		#echo "Average Avg Credits: ${average_avg_credits}"
+		#echo "Num Valid Epochs: ${num_valid_epochs}"
+	else
+		#echo "No valid epochs found."
+		average_avg_credits=432000
+	fi
+}
+
+function time_to_credits() {
+	# Отримати поточні виконані слоти та цільове значення виконаних слотів
+	CURRENT_CREDITS=${1:-0}
+	TARGET_CREDITS=$(echo "0.97 * ${2:-432000}" | bc)
+	TARGET_CREDITS=$(echo "scale=0; $TARGET_CREDITS/1" | bc)
+	FULL_OR_SHORT=${3:-"full"}
+	
+	# Отримати поточний час слоту
+#	local FIRST_SLOT=`echo -e "$EPOCH_INFO" | grep "Epoch Slot Range: " | cut -d '[' -f 2 | cut -d '.' -f 1`
+#	local LAST_SLOT=`echo -e "$EPOCH_INFO" | grep "Epoch Slot Range: " | cut -d '[' -f 2 | cut -d '.' -f 3 | cut -d ')' -f 1`
+#	local EPOCH_LEN_TEXT=`echo -e "$EPOCH_INFO" | grep "Completed Time" | cut -d '/' -f 2 | cut -d '(' -f 1`
+#	local EPOCH_LEN_SEC=$(durationToSeconds "${EPOCH_LEN_TEXT}")
+	local EPOCH_COM_TEXT=`echo -e "$EPOCH_INFO" | grep "Completed Time" | awk -F'/' '{print $1}' | cut -d '(' -f 1 | cut -d ':' -f 2 | sed 's/\*//g'`
+	local EPOCH_COM_SEC=$(durationToSeconds "${EPOCH_COM_TEXT}")
+	local EPOCH_REM_TEXT=$(echo "$EPOCH_INFO" | grep "Completed Time" | cut -d '(' -f 2 | cut -d ')' -f 1 | awk '{NF--}1')
+	local EPOCH_REM_SEC=$(durationToSeconds "${EPOCH_REM_TEXT}")
+#	local SLOT_LEN_SEC=`echo "scale=10; ${EPOCH_LEN_SEC}/(${LAST_SLOT}-${FIRST_SLOT})" | bc`
+#	local SLOT_PER_SEC=`echo "scale=10; 1.0/${SLOT_LEN_SEC}" | bc`
+	local MY_SLOT_LEN_SEC=`echo "scale=10; ${EPOCH_COM_SEC}/${CURRENT_CREDITS}" | bc`
+	local MY_SLOT_PER_SEC=`echo "scale=10; 1.0/${MY_SLOT_LEN_SEC}" | bc`
+
+	# Отримати кількість виконаних слотів за епоху
+#	completed_slots=$(echo "$EPOCH_INFO" | grep "Epoch Completed Slots" | awk '{print $4}' | cut -d'/' -f1)
+
+	# Обчислити час досягнення цільової кількості слотів
+	time_to_target=$(echo "scale=2; ($TARGET_CREDITS - $CURRENT_CREDITS) / $MY_SLOT_PER_SEC" | bc)
+	
+	# Обчислити час досягнення цільової кількості слотів в годинах, хвилинах і секундах
+	hours_to_target_remaining=$(echo "$time_to_target / 3600" | bc)
+	minutes_to_target_remaining=$(echo "($time_to_target % 3600) / 60" | bc)
+	seconds_to_target_remaining=$(echo "$time_to_target % 60" | bc)
+	seconds_to_target_remaining=$(echo "scale=0; $seconds_to_target_remaining/1" | bc)
+
+	# Обчислити залишковий час до кінця епохи
+	time_remaining=$(echo "$EPOCH_REM_SEC - $time_to_target" | bc)
+	
+	# Обчислити залишковий час до кінця епохи в годинах, хвилинах і секундах
+	hours_remaining=$(echo "$time_remaining / 3600" | bc)
+	minutes_remaining=$(echo "($time_remaining % 3600) / 60" | bc)
+	seconds_remaining=$(echo "$time_remaining % 60" | bc)
+	seconds_remaining=$(echo "scale=0; $seconds_remaining/1" | bc)
+
+	# Вивести результат
+	# echo
+	# echo "Зараз виконано слотів (кредитсів) в кластері: $completed_slots"
+	# echo "Мої кредитси зараз: $CURRENT_CREDITS"
+	# echo "Цільові кредитси (найбільше значення за останні ~10 епох мінус 3% грейс): $TARGET_CREDITS"
+	# echo
+	# echo "Перший слот епохи: $FIRST_SLOT"
+	# echo "Останній слот епохи: $LAST_SLOT"
+	# echo "Тривалість епохи (текст): $EPOCH_LEN_TEXT"
+	# echo "Тривалість епохи (секунд): $EPOCH_LEN_SEC"
+	# echo "Пройдено епохи (текст): $EPOCH_COM_TEXT"
+	# echo "Пройдено епохи (секунд): $EPOCH_COM_SEC"
+	# echo "Залишилось епохи (текст): $EPOCH_REM_TEXT"
+	# echo "Залишилось епохи (секунд): $EPOCH_REM_SEC"
+	# echo
+	# echo "Довжина слота (в цю епоху): $SLOT_LEN_SEC"
+	# echo "Слотів за секунду (в цю епоху): $SLOT_PER_SEC"
+	# echo "Довжина мого слота (кредитса) (в цю епоху): $MY_SLOT_LEN_SEC"
+	# echo "Моїх кредитсів за секунду (в цю епоху): $MY_SLOT_PER_SEC"
+	# echo "Моїх кредитсів за хвилину (в цю епоху): $(echo "60 * $MY_SLOT_PER_SEC" | bc)"
+	# echo
+	# echo "Час досягнення цільової кількості слотів (в секундах): $time_to_target секунд"
+	# echo "Час досягнення цільової кількості слотів (текст): ${hours_to_target_remaining}h ${minutes_to_target_remaining}m ${seconds_to_target_remaining}s"
+	# echo "Додатковий час, який можна бути в делінку до кінця епохи (в секундах): $time_remaining секунд"
+	# echo "Додатковий час, який можна бути в делінку до кінця епохи (текст): ${hours_remaining}h ${minutes_remaining}m ${seconds_remaining}s"
+	# echo
+	
+	IFS=' ' read -ra numbers <<< "$all_valid_stakebot_epochs"
+	new_line=""
+
+	for number in "${numbers[@]}"; do
+		if [ "$number" -lt "$CURRENT_CREDITS" ]; then
+			new_line="${new_line}${GREEN}${number}${NOCOLOR} "
+		else
+			new_line="${new_line}${number} "
+		fi
+	done
+	
+	if [[ "${FULL_OR_SHORT}" == "full" ]]; then
+		echo -e "Max-avg-credits in last ~10 epochs was ${2:-432000} (minus grace 3%: $TARGET_CREDITS)"
+		echo -e "Past epochs avg-credits minus grace 3% was: $(echo $new_line | awk '{print $1 " " $2 " " $3 " " $4 " " $5 " " $6 " " $7 " " $8 " " $9 " " $10}')"
+		if (( $(bc<<<"scale=2;${CURRENT_CREDITS:-0} >= $TARGET_CREDITS") )); then
+		  echo -e "${GREEN}Your Node fulfilled the historical credits plan! | $(bc<<<"scale=2;100*${CURRENT_CREDITS:-0}/$TARGET_CREDITS"-100)% overachievement${NOCOLOR}"
+		else
+		  echo -e "Your Node not yet fulfilled the historical credits plan: $(bc<<<"scale=2;$TARGET_CREDITS-${CURRENT_CREDITS:-0}") | ${YELLOW}$(bc<<<"scale=2;100-100*${CURRENT_CREDITS:-0}/$TARGET_CREDITS")% remains${NOCOLOR}"
+		  echo -e "${NOCOLOR}Time to fulfill plan: ${hours_to_target_remaining}h ${minutes_to_target_remaining}m ${seconds_to_target_remaining}s | Probably-Safe delink time: ${hours_remaining}h ${minutes_remaining}m ${seconds_remaining}s${NOCOLOR}"
+		fi
+	else
+		if (( $(bc<<<"scale=2;${CURRENT_CREDITS:-0} >= $TARGET_CREDITS") )); then
+		  echo -e " | ${GREEN}Max-avg historical plan reached!${NOCOLOR} | ${GREEN}$(bc<<<"scale=2;100*${CURRENT_CREDITS:-0}/$TARGET_CREDITS"-100)% overachievement${NOCOLOR}"
+		else
+		  if [ "${seconds_remaining:-0}" -gt 0 ]; then
+		    formatted_time=`echo -e "| max-safe-delink $(printf "%d:%02d:%02d" "$hours_remaining" "$minutes_remaining" "$seconds_remaining")"`
+		  else
+		    formatted_time="| delink is undesirable"
+		  fi
+		  echo -e " | history (3% grace) $(echo $new_line | awk '{print $1 " " $2 " " $3 " " $4 " " $5}') |${YELLOW} $(bc<<<"scale=2;100-100*${CURRENT_CREDITS:-0}/$TARGET_CREDITS")% remaining ${NOCOLOR}${NOCOLOR}$formatted_time"
+		fi
+	fi
+}
+
+
+
+# start of see schedule block
+# modified from https://github.com/Vahhhh/solana/blob/main/see-schedule.sh - BIG THANKS!!!
+
+#from https://stackoverflow.com/a/58617630OD
+function durationToSeconds () {
+  set -f
+  normalize () { echo $1 | tr '[:upper:]' '[:lower:]' | tr -d "\"\\\'" | sed 's/years\{0,1\}/y/g; s/months\{0,1\}/m/g; s/days\{0,1\}/d/g; s/hours\{0,1\}/h/g; s/minutes\{0,1\}/m/g; s/min/m/g; s/seconds\{0,1\}/s/g; s/sec/s/g;  s/ //g;'; }
+  local value=$(normalize "$1")
+  local fallback=$(normalize "$2")
+
+  echo $value | grep -v '^[-+*/0-9ydhms]\{0,30\}$' > /dev/null 2>&1
+  if [ $? -eq 0 ]
+  then
+    >&2 echo Invalid duration pattern \"$value\"
+  else
+    if [ "$value" = "" ]; then
+      [ "$fallback" != "" ] && durationToSeconds "$fallback"
+    else
+      sedtmpl () { echo "s/\([0-9]\+\)$1/(0\1 * $2)/g;"; }
+      local template="$(sedtmpl '\( \|$\)' 1) $(sedtmpl y '365 * 86400') $(sedtmpl d 86400) $(sedtmpl h 3600) $(sedtmpl m 60) $(sedtmpl s 1) s/) *(/) + (/g;"
+      echo $value | sed "$template" | bc
+    fi
+  fi
+  set +f
+}
+
+function slotDate () {
+  local SLOT=${1}
+  local SLOT_DIFF=`echo "${SLOT}-${CURRENT_SLOT}" | bc`
+  local DELTA=`echo "(${SLOT_LEN_SEC}*${SLOT_DIFF})/1" | bc`
+  local SLOT_DATE_SEC=`echo "${NOW_SEC} + ${DELTA}" | bc`
+  local DATE_TEXT=`date +"%F %T" -d @${SLOT_DATE_SEC}`
+  echo "${DATE_TEXT}"
+}
+
+function slotColor() {
+  local SLOT=${1}
+  local COLOR=`
+    if (( ${SLOT:-0} <= ${CURRENT_SLOT:-0} )); then
+      echo "${RED}old< "
+    else
+      echo "${GREEN}new> "
+    fi`
+  echo -e "${COLOR}"
+}
+
+function see_shedule() {
+
+	local DEFAULT_SOLANA_ADRESS1=`echo $(solana address)`
+	local DEFAULT_CLUSTER1='-ul'
+
+	local THIS_SOLANA_ADRESS1=${1:-$DEFAULT_SOLANA_ADRESS1}
+	local SOLANA_CLUSTER1=' '${2:-$DEFAULT_CLUSTER1}' '
+
+	local NOW=`date +"%F %T"`
+	local NOW_SEC=`date +%s`
+	local SCHEDULE=`solana ${SOLANA_CLUSTER1} leader-schedule | grep ${THIS_SOLANA_ADRESS1}`
+
+	local FIRST_SLOT=`echo -e "$EPOCH_INFO" | grep "Epoch Slot Range: " | cut -d '[' -f 2 | cut -d '.' -f 1`
+	local LAST_SLOT=`echo -e "$EPOCH_INFO" | grep "Epoch Slot Range: " | cut -d '[' -f 2 | cut -d '.' -f 3 | cut -d ')' -f 1`
+	local CURRENT_SLOT=`echo -e "$EPOCH_INFO" | grep "Slot: " | cut -d ':' -f 2 | cut -d ' ' -f 2`
+	local EPOCH_LEN_TEXT=`echo -e "$EPOCH_INFO" | grep "Completed Time" | cut -d '/' -f 2 | cut -d '(' -f 1`
+	local EPOCH_LEN_SEC=$(durationToSeconds "${EPOCH_LEN_TEXT}")
+	local SLOT_LEN_SEC=`echo "scale=10; ${EPOCH_LEN_SEC}/(${LAST_SLOT}-${FIRST_SLOT})" | bc`
+	local SLOT_PER_SEC=`echo "scale=10; 1.0/${SLOT_LEN_SEC}" | bc`
+	local COMPLETED_SLOTS=`echo -e "${SCHEDULE}" | awk -v cs="${CURRENT_SLOT:-0}" '{ if ( ! -z "$1" ) if ($1 <= cs) { print }}' | wc -l`
+	local REMAINING_SLOTS=`echo -e "${SCHEDULE}" | awk -v cs="${CURRENT_SLOT:-0}" '{ if ( ! -z "$1" ) if ($1 > cs) { print }}' | wc -l`
+	local TOTAL_SLOTS=`echo -e "${SCHEDULE}" | wc -l`
+
+	echo "${NOW}"
+	echo "Speed: ${SLOT_PER_SEC} slots per second"
+	echo " Time: ${SLOT_LEN_SEC} seconds per slot"
+	echo "My Slots ${COMPLETED_SLOTS}/${TOTAL_SLOTS} (${REMAINING_SLOTS} remaining)"
+	echo
+	echo "${EPOCH_INFO}"
+	echo
+	echo -e "${CYAN}Start:   `slotDate ${FIRST_SLOT}`${NOCOLOR}"
+	echo "${SCHEDULE}" | sed 's/|/ /' | awk '{print $1}' | while read in; do
+	COLOR=`slotColor ${in}`
+	echo -e "${COLOR}$in `slotDate ${in}`${NOCOLOR}";
+	done
+	echo -e "${CYAN}End:     `slotDate ${LAST_SLOT}`${NOCOLOR}"
+}
+
+# end of see schedule block
+
+
+
+function Optimistic_Slot_Now() {
+
+	echo "null"
+	exit 1
+	
+
+	sleep ${1:-3}
+
+	local NOW_S=`date +"%s"`
+	local TMRW_S=`echo "${NOW_S} + 24*60*60" | bc`
+	local NOW=`date --date @${NOW_S} +"%FT%T.%3NZ"`
+	local TMRW=`date --date @${TMRW_S} +"%FT%T.%3NZ"`
+	
+	NOW_S=$NOW_S'000'
+	TMRW_S=$TMRW_S'000'
+	
+	local CLUSTER_FOR_API=`
+		if [[ "${CLUSTER_NAME}" == "(TESTNET)" ]]; then
+		  echo "testnet"
+		elif [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+		  echo "mainnet-beta"
+		else
+		  echo ""
+		fi`
+		
+	local REFERER=`echo "https://metrics.solana.com/d/EcFDgFgVk/validator-last-optimistic-slot?orgId=1&refresh=1m&var-bucket="``echo "${CLUSTER_FOR_API}&var-host_id=${THIS_SOLANA_ADRESS}&viewPanel=5"`
+	
+	local ALL_RESULT=`curl -s -g 'https://metrics.solana.com/api/ds/query' \
+  -H 'Accept-Language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Cookie: _ga=GA1.2.1085836855.1617899020' \
+  -H 'Origin: https://metrics.solana.com' \
+  -H 'Referer: $REFERER' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'content-type: application/json' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"cF6_LMfnz","type":"influxdb"},"query":"from(bucket: \"'${CLUSTER_FOR_API}'\")\n       |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n       |> filter(fn: (r) => r[\"_measurement\"] == \"optimistic_slot\")\n       |> filter(fn: (r) => r[\"_field\"] == \"slot\")\n       |> filter(fn: (r) => r[\"host_id\"] ==\"'${THIS_SOLANA_ADRESS}'\")\n       |> max()\n","refId":"A","datasourceId":8,"intervalMs":1800000,"maxDataPoints":1066}],"range":{"from":"now-1d","to":"now+1d","raw":{"from":"now-1d","to":"now+1d"}},"from":"now-1d","to":"now+1d"}' \
+  --compressed 2> /dev/null`
+	
+	local OPTIMISTIC_SLOT_RIGHT_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[1][0]'  2> /dev/null`
+	local OPTIMISTIC_SLOT_TIME_RIGHT_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[0][0]'  2> /dev/null`
+	local COLOR_OPT_SLOT=`echo "${NOCOLOR}"`
+	
+	if (( $(bc<<<"scale=0;${OPTIMISTIC_SLOT_TIME_RIGHT_NOW:-0} != 0") )); then
+		OPTIMISTIC_SLOT_TIME_RIGHT_NOW=${OPTIMISTIC_SLOT_TIME_RIGHT_NOW::${#OPTIMISTIC_SLOT_TIME_RIGHT_NOW}-3}
+		local OPTIMISTIC_SLOT_DATE=" | "`date --date @${OPTIMISTIC_SLOT_TIME_RIGHT_NOW:-0} +"%F %T" 2>&1`"${SERVER_TIME_ZONE:-}"
+		else
+		NOW_S=${NOW_S::${#NOW_S}-3}
+		local OPTIMISTIC_SLOT_DATE=" | "`date --date @${NOW_S:-0} +"%F %T" 2>&1`"${SERVER_TIME_ZONE:-}"
+		COLOR_OPT_SLOT=`echo "${YELLOW}"`
+	fi
+	
+	#"Optimistic Slot: "
+	
+	echo -e ${OPTIMISTIC_SLOT_RIGHT_NOW:-null} #${OPTIMISTIC_SLOT_DATE:-""}
+}
+
+function Optimistic_Slot_Summary() {
+
+	local GL_COLOR_OPT_SLOT=`echo "${RED}"`
+	local GL_TEXT_OPT_SLOT=`echo "${RED}Optimistic Slot Outdated! Recheck it after 5 minutes, or check your log for correct metrics sharing!${NOCOLOR}"`
+	local first_elem=`echo "${OPTIMISTIC_ARR[0]}" | awk '{print $1}'`
+	
+	for ix in ${!OPTIMISTIC_ARR[*]}
+	do
+		local this_elem=`echo "${OPTIMISTIC_ARR[$ix]}" | awk '{print $1}'`
+		if [[ "${this_elem}" != "null" ]];
+		then
+			if [[ "${this_elem}" != "${first_elem}" ]];
+			then
+				GL_COLOR_OPT_SLOT=`echo "${GREEN}"`
+				GL_TEXT_OPT_SLOT=""
+			fi
+		fi
+	done
+	
+	
+	if [[ "${OPTIMISTIC_ARR[0]}" != "null" ]];
+	then
+		if [[ "${OPTIMISTIC_ARR[-1]}" != "null" ]];
+		then
+			echo -e "${CYAN}"
+			echo -e "Metrics Sending Now ${NOCOLOR}"
+			echo -e "Optimistic Slot 1: ${GL_COLOR_OPT_SLOT}"`printf "%s\n" "${OPTIMISTIC_ARR[0]}"`"${NOCOLOR}"
+			echo -e "Optimistic Slot 2: ${GL_COLOR_OPT_SLOT}"`printf "%s\n" "${OPTIMISTIC_ARR[-1]}"`"${NOCOLOR}"
+			echo -e "${GL_TEXT_OPT_SLOT}" | awk 'length > 5'
+		fi
+	fi
+	
+}
+
+
+function Graphana_hardware_info() {
+	
+	#Disk Space
+	
+	#102 disk
+	#139 swap
+	#104 cpu
+	#108 ram
+	#118 descriptors
+	
+	local GRAPHANA_CODE=${1:-102}  #"102"
+	
+	THIS_SOLANA_VALIDATOR_INFO=`solana ${SOLANA_CLUSTER} validator-info get | awk '$0 ~ sadddddr {do_print=1} do_print==1 {print} NF==0 {do_print=0}' sadddddr=$THIS_SOLANA_ADRESS`
+	
+	NODE_NAME=`echo -e "${THIS_SOLANA_VALIDATOR_INFO}" | grep 'Name: ' | sed 's/Name: //g' | sed 's/^[ \t]*//g' | sed 's/[ \t]*$//g'`
+	
+	local NOW_S=`date +"%s"`
+	local PREV_S=`echo "${NOW_S} + 1*60" | bc`
+	local NOW=`date --date @${NOW_S} +"%FT%T.%3NZ"`
+	local PREV=`date --date @${PREV_S} +"%FT%T.%3NZ"`
+	
+	NOW_S=$NOW_S'000'
+	PREV_S=$PREV_S'000'
+	
+	local CLUSTER_FOR_API=`
+		if [[ "${CLUSTER_NAME}" == "(TESTNET)" ]]; then
+		  echo "testnet"
+		elif [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+		  echo "mainnet-beta"
+		else
+		  echo ""
+		fi`
+
+	#echo "Host: "${GRAFANA_HOST_NAME}
+	
+	local REFERER=`echo "https://metrics.stakeconomy.com/d/f2b2HcaGz/solana-community-validator-dashboard?var-pubkey="``echo "${THIS_SOLANA_ADRESS}&orgId=1&refresh=1m&viewPanel=${GRAPHANA_CODE}&from=now-5m&to=now&inspect=${GRAPHANA_CODE}"`
+	
+	if [[ ${GRAPHANA_CODE} == "102" ]]; then
+	local ALL_RESULT=`curl -g -s 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"disk_used_percent{host =~ \"'$GRAFANA_HOST_NAME'$\", path=\"/\"}","legendFormat":"__auto","range":true,"refId":"A","queryType":"timeSeriesQuery","exemplar":false,"requestId":"71A","utcOffsetSec":0,"interval":"","datasourceId":1,"intervalMs":15000,"maxDataPoints":100}],"range":{"from":"now-5m","to":"now","raw":{"from":"now-5m","to":"now"}},"from":"now-5m","to":"now"}' \
+  --compressed 2> /dev/null`
+  
+  elif [[ ${GRAPHANA_CODE} == "139" ]]; then  
+    local ALL_RESULT=`curl -g -s 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not=A?Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"alias":"$tag_host: $col","col":"used","datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"dsType":"prometheus","expr":"median(swap_used{host =~ \"'$GRAFANA_HOST_NAME'$\"}) by (host)","function":"mean","groupBy":" by (host)","interval":"","legendFormat":"{{host}}: used","measurement":"swap","policy":"default","query":"select mean(used) as used from \"swap\" WHERE host =~ /$server$/ AND $timeFilter GROUP BY time($interval), host ORDER BY asc","rawQuery":true,"refId":"B","resultFormat":"time_series","select":[[{"params":["used"],"type":"mean"}]],"tags":"{host =~ \"$server$\"}","queryType":"timeSeriesQuery","exemplar":false,"requestId":"139B","utcOffsetSec":0,"datasourceId":1,"intervalMs":15000,"maxDataPoints":100},{"alias":"$tag_host: $col","col":"total","datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"dsType":"prometheus","expr":"median(swap_total{host =~ \"'$GRAFANA_HOST_NAME'$\"}) by (host)","function":"mean","groupBy":" by (host)","interval":"","legendFormat":"{{host}}: total","measurement":"swap","policy":"default","query":"select mean(total) as total from \"swap\" WHERE host =~ /$server$/ AND $timeFilter GROUP BY time($interval), host ORDER BY asc","rawQuery":true,"refId":"C","resultFormat":"time_series","select":[[{"params":["total"],"type":"mean"}]],"tags":"{host =~ \"$server$\"}","queryType":"timeSeriesQuery","exemplar":false,"requestId":"139C","utcOffsetSec":0,"datasourceId":1,"intervalMs":15000,"maxDataPoints":100}],"range":{"from":"now-5m","to":"now","raw":{"from":"now-5m","to":"now"}},"from":"now-5m","to":"now"}' \
+  --compressed 2> /dev/null`
+  
+  elif [[ ${GRAPHANA_CODE} == "73" ]]; then
+	local ALL_RESULT=`curl 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not=A?Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"100-cpu_usage_idle{host =~ \"^GwuVgxewTRizBWM622HQeY5qBJ4dcvyQyZ7JnsXnRLRQ$\",cpu = \"cpu-total\"}","legendFormat":"__auto","range":true,"refId":"A","queryType":"timeSeriesQuery","exemplar":false,"requestId":"73A","utcOffsetSec":0,"interval":"","datasourceId":1,"intervalMs":20000,"maxDataPoints":100}],"range":{"from":"now-5m","to":"now","raw":{"from":"now-5m","to":"now"}},"from":"now-5m","to":"now"}' \
+  --compressed 2> /dev/null`
+  
+  elif [[ ${GRAPHANA_CODE} == "67" ]]; then
+	local ALL_RESULT=`curl 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not=A?Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"cpu_usage_iowait{host =~ \"^'$GRAFANA_HOST_NAME'$\",cpu = \"cpu-total\"}","legendFormat":"__auto","range":true,"refId":"A","queryType":"timeSeriesQuery","exemplar":false,"requestId":"67A","utcOffsetSec":0,"interval":"","datasourceId":1,"intervalMs":20000,"maxDataPoints":100}],"range":{"from":"now-5m","to":"now","raw":{"from":"now-5m","to":"now"}},"from":"now-5m","to":"now"}' \
+  --compressed 2> /dev/null`
+  
+  elif [[ ${GRAPHANA_CODE} == "108" ]]; then
+	local ALL_RESULT=`curl -g -s 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"median(mem_total{host =~ \"'$GRAFANA_HOST_NAME'$\"}) by (host)","interval":"1m","legendFormat":"{{host}}: total","range":true,"refId":"A","queryType":"timeSeriesQuery","exemplar":false,"requestId":"108A","utcOffsetSec":0,"datasourceId":1,"intervalMs":60000,"maxDataPoints":1057},{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"median(mem_used{host =~ \"'$GRAFANA_HOST_NAME'$\"}) by (host)","hide":false,"interval":"1m","legendFormat":"{{host}}: used","range":true,"refId":"B","queryType":"timeSeriesQuery","exemplar":false,"requestId":"108B","utcOffsetSec":0,"datasourceId":1,"intervalMs":60000,"maxDataPoints":1057},{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"median(mem_cached{host =~ \"'$GRAFANA_HOST_NAME'$\"}) by (host)","hide":false,"interval":"1m","legendFormat":"{{host}}: cached","range":true,"refId":"C","queryType":"timeSeriesQuery","exemplar":false,"requestId":"108C","utcOffsetSec":0,"datasourceId":1,"intervalMs":60000,"maxDataPoints":1057},{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"median(mem_free{host =~ \"'$GRAFANA_HOST_NAME'$\"}) by (host)","hide":false,"interval":"1m","legendFormat":"{{host}}: free","range":true,"refId":"D","queryType":"timeSeriesQuery","exemplar":false,"requestId":"108D","utcOffsetSec":0,"datasourceId":1,"intervalMs":60000,"maxDataPoints":1057},{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"median(mem_buffered{host =~ \"'$GRAFANA_HOST_NAME'$\"}) by (host)","hide":false,"interval":"1m","legendFormat":"{{host}}: buffered","range":true,"refId":"E","queryType":"timeSeriesQuery","exemplar":false,"requestId":"108E","utcOffsetSec":0,"datasourceId":1,"intervalMs":60000,"maxDataPoints":1057}],"range":{"from":"now-2m","to":"now","raw":{"from":"now-2m","to":"now"}},"from":"now-2m","to":"now"}' \
+  --compressed 2> /dev/null`
+  
+  
+  
+  elif [[ ${GRAPHANA_CODE} == "118" ]]; then
+	local ALL_RESULT=`curl -g -s 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"nodemonitor_openFiles{host=\"'$GRAFANA_HOST_NAME'\"}[1m]","legendFormat":"__auto","range":true,"refId":"A","queryType":"timeSeriesQuery","exemplar":false,"requestId":"118A","utcOffsetSec":0,"interval":"","datasourceId":1,"intervalMs":60000,"maxDataPoints":1057}],"range":{"from":"now-5m","to":"now","raw":{"from":"now-5m","to":"now"}},"from":"now-5m","to":"now"}' \
+  --compressed 2> /dev/null`
+  
+  
+  
+  elif [[ ${GRAPHANA_CODE} == "111" ]]; then
+	local ALL_RESULT=`curl -g -s 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","exemplar":false,"expr":"abs(ideriv(median(net_bytes_recv{host =~ \"'$GRAFANA_HOST_NAME'\"}) by (host,interface)))*8","interval":"1m","legendFormat":"{{host}}: {{interface}}: in","range":true,"refId":"A","queryType":"timeSeriesQuery","requestId":"111A","utcOffsetSec":0,"datasourceId":1,"intervalMs":60000,"maxDataPoints":1057},{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"abs(ideriv(median(net_bytes_sent{host =~ \"'$GRAFANA_HOST_NAME'\"}) by (host,interface)))*8","hide":false,"interval":"1m","legendFormat":"{{host}}: {{interface}}: out","range":true,"refId":"B","queryType":"timeSeriesQuery","exemplar":false,"requestId":"111B","utcOffsetSec":0,"datasourceId":1,"intervalMs":60000,"maxDataPoints":1057}],"range":{"from":"now-5m","to":"now","raw":{"from":"now-5m","to":"now"}},"from":"now-5m","to":"now"}' \
+  --compressed 2> /dev/null`
+  
+  else
+  local ALL_RESULT=""
+  fi
+  
+  
+	
+	local GRAPHANA_DATA_1_NAME=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].schema.name'  2> /dev/null`
+	local GRAPHANA_DATA_1_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[1][0]' | awk '{print ($1/(1024*1024*1024))}' 2> /dev/null | awk '{printf("%.1f\n",$1)}'  2> /dev/null`
+	local GRAPHANA_DATA_1_NOW_TIME_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[0][0]'  2> /dev/null`
+	
+	local GRAPHANA_DATA_2_NAME=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.B.frames[0].schema.name'  2> /dev/null`
+	local GRAPHANA_DATA_2_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.B.frames[0].data.values[1][0]' | awk '{print ($1/(1024*1024*1024))}' 2> /dev/null | awk '{printf("%.1f\n",$1)}'  2> /dev/null`
+	local GRAPHANA_DATA_2_NOW_TIME_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.B.frames[0].data.values[0][0]'  2> /dev/null`
+	
+	
+	
+	
+	
+	if [[ ${GRAPHANA_CODE} == "102" ]]; then
+	
+		#if [[ ${GRAPHANA_DATA_1_NOW:-0} == "0" ]]; then
+		#GRAPHANA_DATA_1_NOW="1"
+		#fi
+		
+		GRAPHANA_DISK_DATA=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[1][-1]'  2> /dev/null | awk '{printf("%.2f\n",$1)}' 2> /dev/null | awk '{ if (($1 <= 80.00)) print gr$1"%"nc; else if (($1 <= 87.00)) print ye$1"%"nc; else print rd$1"%"nc; fi }' gr=$GREEN ye=$YELLOW rd=$RED nc=$NOCOLOR`
+		
+		echo -e "Disk: "${GRAPHANA_DISK_DATA}
+		
+	elif [[ ${GRAPHANA_CODE} == "139" ]]; then
+		
+		GRAPHANA_SWAP_DATA_TOTAL=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.C.frames[0].data.values[1][0]' | awk '{print ($1/(1024*1024*1024))}' 2> /dev/null | awk '{printf("%.1f\n",$1)}'  2> /dev/null`
+		GRAPHANA_SWAP_DATA_USED=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.B.frames[0].data.values[1][0]' | awk '{print ($1/(1024*1024*1024))}' 2> /dev/null | awk '{printf("%.1f\n",$1)}'  2> /dev/null`
+		
+		if (( $(bc<<<"scale=2;${GRAPHANA_SWAP_DATA_TOTAL:-0} <= 0.5") ));
+			then
+				GRAPHANA_SWAP_DATA_TOTAL="1"
+				GRAPHANA_SWAP_DATA_TOTAL_SHOW="0"
+			else
+				GRAPHANA_SWAP_DATA_TOTAL_SHOW=$GRAPHANA_SWAP_DATA_TOTAL
+		fi
+		
+		GRAPHANA_SWAP_COLOR=`
+		if (( $(bc<<<"scale=2;100*${GRAPHANA_SWAP_DATA_USED:-0}/${GRAPHANA_SWAP_DATA_TOTAL:-1} >= 95") )); then
+			echo "${YELLOW}"
+		elif (( $(bc<<<"scale=2;100*${GRAPHANA_SWAP_DATA_USED:-0}/${GRAPHANA_SWAP_DATA_TOTAL:-1} >= 85") )); then
+			echo "${RED}"
+		else
+			echo "${GREEN}"
+		fi`
+		
+		echo -e "Swap: "${GRAPHANA_SWAP_COLOR}${GRAPHANA_SWAP_DATA_USED:-N/A}"Gb/"${GRAPHANA_SWAP_DATA_TOTAL_SHOW:-N/A}"Gb"${NOCOLOR}
+		
+	elif [[ ${GRAPHANA_CODE} == "73" ]]; then
+		
+		GRAPHANA_CPU_DATA=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[1][-1]'  2> /dev/null | awk '{printf("%.2f\n",$1)}' 2> /dev/null | awk '{ if (($1 <= 80.00)) print gr$1"%"nc; else if (($1 <= 90.00)) print ye$1"%"nc; else print rd$1"%"nc; fi }' gr=$GREEN ye=$YELLOW rd=$RED nc=$NOCOLOR`
+		
+		echo -e "CPU: "${GRAPHANA_CPU_DATA}
+		
+	elif [[ ${GRAPHANA_CODE} == "67" ]]; then
+		
+		GRAPHANA_IOWAIT=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[1][-1]'  2> /dev/null | awk '{printf("%.2f\n",$1)}' 2> /dev/null | awk '{ if (($1 <= 8.00)) print gr$1"%"nc; else if (($1 <= 20.00)) print ye$1"%"nc; else print rd$1"%"nc; fi }' gr=$GREEN ye=$YELLOW rd=$RED nc=$NOCOLOR`
+		
+		echo -e "IOWait: "${GRAPHANA_IOWAIT}
+		
+	elif [[ ${GRAPHANA_CODE} == "108" ]]; then
+		
+		GRAPHANA_RAM_COLOR=`
+		if (( $(bc<<<"scale=2;100*${GRAPHANA_DATA_2_NOW:-0}/${GRAPHANA_DATA_1_NOW:-1} >= 95") )); then
+			echo "${YELLOW}"
+		elif (( $(bc<<<"scale=2;100*${GRAPHANA_DATA_2_NOW:-0}/${GRAPHANA_DATA_1_NOW:-1} >= 85") )); then
+			echo "${RED}"
+		else
+			echo "${GREEN}"
+		fi`
+		
+		echo -e "RAM: "${GRAPHANA_RAM_COLOR}${GRAPHANA_DATA_2_NOW:-N/A}"Gb/"${GRAPHANA_DATA_1_NOW:-N/A}"Gb"${NOCOLOR}
+		
+	elif [[ ${GRAPHANA_CODE} == "118" ]]; then
+		
+		GRAPHANA_DATA_1_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[1][-1]' | bc  2> /dev/null`
+		
+		GRAPHANA_OFD_COLOR=`
+		if (( $(bc<<<"scale=2;${GRAPHANA_DATA_1_NOW:-1000001} >= 900000") )); then
+			echo "${RED}"
+		elif (( $(bc<<<"scale=2;${GRAPHANA_DATA_1_NOW:-1000001} >= 800000") )); then
+			echo "${YELLOW}"
+		else
+			echo "${GREEN}"
+		fi`
+		
+		echo -e "Descriptors: "${GRAPHANA_OFD_COLOR}${GRAPHANA_DATA_1_NOW:-N/A}${NOCOLOR}
+		
+		
+	elif [[ ${GRAPHANA_CODE} == "111" ]]; then
+		
+		GRAPHANA_DATA_1_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].data.values[1][0]' | bc | awk '{print ($1/1024/1024)}' | awk '{printf("%.1f\n",$1)}'  2> /dev/null`
+		
+		GRAPHANA_DATA_2_NOW=`echo $ALL_RESULT | jq -r @json 2> /dev/null | jq -r '.results.B.frames[0].data.values[1][0]' | bc | awk '{print ($1/1024/1024)}' | awk '{printf("%.1f\n",$1)}'  2> /dev/null`
+		
+		GRAPHANA_N1_COLOR=`
+		if (( $(bc<<<"scale=2;${GRAPHANA_DATA_1_NOW:-0} >= 500") )); then
+			echo "${YELLOW}"
+		elif (( $(bc<<<"scale=2;${GRAPHANA_DATA_1_NOW:-0} >= 800") )); then
+			echo "${RED}"
+		else
+			echo "${GREEN}"
+		fi`
+		
+		GRAPHANA_N2_COLOR=`
+		if (( $(bc<<<"scale=2;${GRAPHANA_DATA_2_NOW:-0} >= 500") )); then
+			echo "${YELLOW}"
+		elif (( $(bc<<<"scale=2;${GRAPHANA_DATA_2_NOW:-0} >= 900") )); then
+			echo "${RED}"
+		else
+			echo "${GREEN}"
+		fi`
+		
+		echo -e "Network: IN "${GRAPHANA_N1_COLOR}${GRAPHANA_DATA_1_NOW:-N/A}"Mb/s"${NOCOLOR}" OUT "${GRAPHANA_N2_COLOR}${GRAPHANA_DATA_2_NOW:-N/A}"Mb/s"${NOCOLOR}
+		
+		
+		
+	else
+		echo -e ""${GRAPHANA_DATA_1_NAME}" "${GRAPHANA_DATA_1_NOW:-N/A}" / "${GRAPHANA_DATA_2_NAME}" "${GRAPHANA_DATA_2_NOW:-N/A}" | "${NOCOLOR}
+	fi
+}
+
+
+
+
+# default info
+
+DEFAULT_SOLANA_ADRESS=`echo $(solana address)`
+DEFAULT_CLUSTER='-ul'
+
+THIS_SOLANA_ADRESS=${1:-$DEFAULT_SOLANA_ADRESS}
+SOLANA_CLUSTER=' '${2:-$DEFAULT_CLUSTER}' '
+FLAG_ONLY_IMPORTANT=${3:-"false"}
+STAKE_SHOW_TYPE=${4:-"false"}
+# Зчитування решти аргументів у масив SORTING_CRITERIAS
+shift 4
+SORTING_CRITERIAS=("$@")
+
+#SOLANA_CLUSTER=`getRandomRPC ${SOLANA_CLUSTER}`
+
+THIS_CONFIG_RPC=`solana config get | grep "RPC URL:"`
+
+if [[ "${SOLANA_CLUSTER}" == " -ul " ]]; then
+  if [[ $THIS_CONFIG_RPC == *"testnet"* ]]; then
+	SOLANA_CLUSTER=" -ut "
+  elif [[ $THIS_CONFIG_RPC == *"mainnet"* ]]; then
+	SOLANA_CLUSTER=" -um "
+  fi
+fi
+
+CLUSTER_NAME=`
+if [[ "${SOLANA_CLUSTER}" == " -ut " ]]; then
+  echo "(TESTNET)"
+elif [[ "${SOLANA_CLUSTER}" == " -um " ]]; then
+  echo "(Mainnet)"
+elif [[ "${SOLANA_CLUSTER}" == " -ul " ]]; then
+  echo "(Taken from Local)"
+else
+  echo ""
+fi`
+
+if [[ "${SOLANA_CLUSTER}" == " -ut " ]]; then
+  CLUSTER_NAME_FOR_API="testnet"
+elif [[ "${SOLANA_CLUSTER}" == " -um " ]]; then
+  CLUSTER_NAME_FOR_API="mainnet-beta"
+else
+  CLUSTER_NAME_FOR_API=""
+fi
+
+OPTIMISTIC_ARR[0]="`Optimistic_Slot_Now`"
+
+EPOCH_INFO=`solana ${SOLANA_CLUSTER} epoch-info 2> /dev/null`
+THIS_EPOCH=`echo -e "${EPOCH_INFO}" | grep 'Epoch: ' | sed 's/Epoch: //g' | awk '{print $1}'`
+LAST_EPOCH=`echo -e "${EPOCH_INFO}" | grep 'Epoch: ' | sed 's/Epoch: //g'`
+
+#SOLANA_VALIDATORS=`solana ${SOLANA_CLUSTER} validators`
+THIS_VALIDATOR_JSON=`solana ${SOLANA_CLUSTER} validators --output json-compact | jq --arg ID ${THIS_SOLANA_ADRESS} '.validators[] | select(.identityPubkey==$ID)'`
+
+YOUR_VOTE_ACCOUNT=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.voteAccountPubkey'`
+#YOUR_VOTE_ACCOUNT=`echo -e "${SOLANA_VALIDATORS}" | grep ${THIS_SOLANA_ADRESS} | sed 's/  */ /g' | cut -d ' ' -f 3`
+
+SEE_SHEDULE_VAR=`see_shedule ${THIS_SOLANA_ADRESS} ${SOLANA_CLUSTER}`
+
+
+	
+
+
+if [[ ${YOUR_VOTE_ACCOUNT} == "" ]]; then
+	echo -e "${RED}${THIS_SOLANA_ADRESS} - can't find node account!"
+	echo -e "<VOTE_ACCOUNT_ADDRESS> for it does not exist or --no-voting key is active or RPC error occured!${NOCOLOR}"
+	exit 1
+fi
+
+
+iterator=0
+DONE_STOP=0
+while [ $DONE_STOP == 0 ]
+do
+	KYC_API_VERCEL_2=`curl -s 'https://kyc-api.vercel.app/api/validators/details?pk='${THIS_SOLANA_ADRESS}'&epoch='${LAST_EPOCH}`
+	if [[ "$(echo "${KYC_API_VERCEL_2}" | jq -r '.message')" != "null" ]]; then
+		LAST_EPOCH=$(echo "$LAST_EPOCH-1" | bc)
+	else
+		DONE_STOP=1
+	fi
+	iterator=$iterator+1
+	#echo $iterator
+	if (( $(bc<<<"scale=0;${iterator:-0} >= 10") )); then
+		DONE_STOP=1
+	fi
+	#echo $LAST_EPOCH
+	#echo $KYC_API_VERCEL_2
+done
+
+KYC_API_VERCEL_3=`curl -s 'https://kyc-api.vercel.app/api/validators/'${THIS_SOLANA_ADRESS}`
+
+
+
+REFERER000=`echo "https://metrics.stakeconomy.com/d/f2b2HcaGz/solana-community-validator-dashboard?var-pubkey="``echo "${THIS_SOLANA_ADRESS}&orgId=1&refresh=1m"`
+	
+GRAFANA_HOST_NAME=`curl -g -s 'https://metrics.stakeconomy.com/api/ds/query' \
+  -H 'authority: metrics.stakeconomy.com' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: en-US,en;q=0.9,uk;q=0.8,ru;q=0.7' \
+  -H 'content-type: application/json' \
+  -H 'origin: https://metrics.stakeconomy.com' \
+  -H 'referer: '${REFERER000}'' \
+  -H 'sec-ch-ua: "Chromium";v="106", "Google Chrome";v="106", "Not;A=Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36' \
+  -H 'x-grafana-org-id: 1' \
+  --data-raw '{"queries":[{"datasource":{"uid":"PBFA97CFB590B2093","type":"prometheus"},"editorMode":"code","expr":"nodemonitor_pctEpochElapsed{pubkey=\"'$THIS_SOLANA_ADRESS'\"}[1m]","legendFormat":"__auto","range":true,"refId":"A","queryType":"timeSeriesQuery","exemplar":false,"requestId":"97A","utcOffsetSec":0,"interval":"","datasourceId":1,"intervalMs":600000,"maxDataPoints":81}],"range":{"from":"now-2m","to":"now","raw":{"from":"now-2m","to":"now"}},"from":"now-2m","to":"now"}' \
+  --compressed | jq -r @json 2> /dev/null | jq -r '.results.A.frames[0].schema.fields[1].labels.host' | sed 's/ / /g' 2> /dev/null`
+
+
+function Time_Now_1 () {
+
+	TIME_NOW=`echo -e "${SEE_SHEDULE_VAR}" | sed -n -e 1p`
+	
+	#echo -ne '\n'
+	echo -e "${GREEN}"
+	echo -e "Time now: ${TIME_NOW:-''}${SERVER_TIME_ZONE:-''}${NOCOLOR}" | awk 'length > 30'
+}
+
+function Epoch_Progress_2 () {
+
+	END_OF_EPOCH=`echo -e "${SEE_SHEDULE_VAR}" | tail -n1 | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' | sed 's/End: /End of epoch:/g' | tr -s ' '`
+	
+	#echo -ne '\n'
+	echo -e "${CYAN}"
+	echo -e "Epoch Progress ${CLUSTER_NAME}${NOCOLOR}"
+
+	echo "$EPOCH_INFO" | grep 'Epoch: '
+	echo "$EPOCH_INFO" | grep 'Epoch Completed Percent'
+	echo "$EPOCH_INFO" | grep 'Epoch Completed Time'
+	echo -e "${NOCOLOR}$END_OF_EPOCH ${NOCOLOR}"
+}
+
+function This_Node_3 () {
+
+	SOLANA_VALIDATORS=`solana ${SOLANA_CLUSTER} validators`
+
+	THIS_SOLANA_VALIDATOR_INFO=`solana ${SOLANA_CLUSTER} validator-info get | awk '$0 ~ sadddddr {do_print=1} do_print==1 {print} NF==0 {do_print=0}' sadddddr=$THIS_SOLANA_ADRESS`
+	#THIS_SOLANA_VALIDATOR_INFO_JS=`solana -ut validator-info get --output json-compact | jq --arg ID $(solana address) '.[] | select(.identityPubkey==$ID)'`
+	
+	NODE_NAME=`echo -e "${THIS_SOLANA_VALIDATOR_INFO}" | grep 'Name: ' | sed 's/Name//g' | tr -s ' '`
+	#NODE_NAME=`echo -e "${THIS_SOLANA_VALIDATOR_INFO_JS}" | jq -r '.info.name'`
+	
+	SOLANA_VERSION=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.version'`
+	#SOLANA_VERSION=`solana ${SOLANA_CLUSTER} validators --output json-compact | jq --arg ID ${THIS_SOLANA_ADRESS} '.validators[] | select(.identityPubkey==$ID) | .version' | sed 's/\"//g'`
+	
+	MAJOR_CLUSTER_VERSION=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k6 -nr | sed 1q | awk '{print $1}'`
+	MAJOR_CLUSTER_VERSION_PERCENT=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k6 -nr | sed 1q | awk '{print $6}'`
+	
+	MAJOR_CLUSTER_VERSION_BY_POPULATION=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k3 -nr | sed 1q | awk '{print $1}'`
+	MAJOR_CLUSTER_VERSION_POPULATION=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k3 -nr | sed 1q | awk '{print $3}'`
+	
+	NODE_COMMISSION=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.commission'`
+	
+	NODE_WITHDRAW_AUTHORITY=`solana ${SOLANA_CLUSTER} vote-account ${YOUR_VOTE_ACCOUNT} | grep 'Withdraw' | awk '{print $NF}'`
+
+	IDACC_BALANCE=`solana ${SOLANA_CLUSTER} balance ${THIS_SOLANA_ADRESS} | sed 's/ SOL//g' `
+	VOTEACC_BALANCE=`solana ${SOLANA_CLUSTER} balance ${YOUR_VOTE_ACCOUNT}`
+	WITHDR_BALANCE=`solana ${SOLANA_CLUSTER} balance ${NODE_WITHDRAW_AUTHORITY}`
+
+	IS_DELINKED=`echo -e "${SOLANA_VALIDATORS}" | grep ⚠️ | if (grep ${THIS_SOLANA_ADRESS} -c)>0; then echo -e "WARNING: ${RED}THIS NODE IS DELINKED\n\rconsider to check catchup, network connection and/or messages from your datacenter${NOCOLOR}"; else >/dev/null; fi`
+	
+	CONCENTRATION=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.data_center_stake_percent' | awk '{printf("%.2f\n",$1)}'`
+	
+	MAX_CONCENTRATION=`
+		if [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+			echo "10.00"
+		else
+			echo "25.00"
+		fi`
+	DC_COLOR=`
+		if (( $(bc<<<"scale=2;${CONCENTRATION} < ${MAX_CONCENTRATION}") )); then
+		  echo "${GREEN}"
+		else
+		  echo "${YELLOW}"
+		fi`
+	
+	CURRENT_DC=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.epoch_data_center.asn'`'-'`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.epoch_data_center.location'`' | '`echo "${DC_COLOR}${CONCENTRATION}"`'%'`echo "${NOCOLOR}"`' concentration'
+	
+	#echo -ne '\n'
+	echo -e "${CYAN}"
+	echo -e "This Node${NODE_NAME} ${NOCOLOR}"
+
+	echo -e "${IS_DELINKED}" | awk 'length > 5'
+
+	#echo -e "Identity: ${THIS_SOLANA_ADRESS}"
+
+	if (( $(bc<<<"scale=0;${IDACC_BALANCE:-0} >= 1.8") )); then
+		echo -e "Identity:   ${THIS_SOLANA_ADRESS} / ${GREEN}${IDACC_BALANCE:-0} SOL${NOCOLOR}"
+	else
+		echo -e "Identity:   ${THIS_SOLANA_ADRESS} / ${RED}${IDACC_BALANCE:-0} SOL${NOCOLOR}"
+	fi
+
+	echo -e "VoteKey:    ${YOUR_VOTE_ACCOUNT} / ${VOTEACC_BALANCE}"
+	#echo -e "VoteKey Balance: ${VOTEACC_BALANCE}"
+	echo -e "Withdrawer: ${NODE_WITHDRAW_AUTHORITY} / ${WITHDR_BALANCE}"
+	#echo -e "Withrawer Balance: ${WITHDR_BALANCE}"
+	
+	if (( $(bc<<<"scale=0;${NODE_COMMISSION:-100} <= 10.0") )); then
+		echo -e "Node commission: " | tr -d '\r\n' && echo -e "${GREEN}${NODE_COMMISSION}%${NOCOLOR}"
+	else
+		if [[ "${CLUSTER_NAME}" != "(Mainnet)" ]]; then
+			echo -e "Node commission: " | tr -d '\r\n' && echo -e "${GREEN}${NODE_COMMISSION}%${NOCOLOR}"
+		else
+			echo -e "Node commission: " | tr -d '\r\n' && echo -e "${RED}${NODE_COMMISSION}%${NOCOLOR}"
+		fi
+	fi
+	
+	if [[ "${SOLANA_VERSION}" == "${MAJOR_CLUSTER_VERSION_BY_POPULATION}" ]]; then
+		echo -e "Solana version: " | tr -d '\r\n' && echo -e "${GREEN}${SOLANA_VERSION}${NOCOLOR} (Majority: ${MAJOR_CLUSTER_VERSION_PERCENT} stake on ${MAJOR_CLUSTER_VERSION} / ${MAJOR_CLUSTER_VERSION_POPULATION} nodes on ${MAJOR_CLUSTER_VERSION_BY_POPULATION}${NOCOLOR})"
+	else
+		echo -e "Solana version: " | tr -d '\r\n' && echo -e "${RED}${SOLANA_VERSION}${NOCOLOR} | Recheck discord for right version (Majority: ${MAJOR_CLUSTER_VERSION_PERCENT} stake on ${MAJOR_CLUSTER_VERSION} / ${MAJOR_CLUSTER_VERSION_POPULATION} nodes on ${MAJOR_CLUSTER_VERSION_BY_POPULATION})"
+	fi
+	
+	echo -e "Datacenter: ${CURRENT_DC}"
+}
+
+function Node_Stake_4 () {
+
+	if [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+		SOLANA_CLUSTER_local=' -um '
+	elif [[ "${CLUSTER_NAME}" == "(TESTNET)" ]]; then
+		SOLANA_CLUSTER_local=' -ut '
+	else
+		SOLANA_CLUSTER_local=' -ul '
+	fi
+
+	SOLANA_STAKES_THIS_NODE=`solana $SOLANA_CLUSTER_local stakes ${YOUR_VOTE_ACCOUNT}`
+
+	TOTAL_ACTIVE_STAKE=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | awk '{n += $1}; END{print 0+n+0}' | bc`
+	TOTAL_STAKE_COUNT=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | grep '' -c`
+
+	ACTIVATING_STAKE=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep 'Activating Stake: ' | sed 's/Activating Stake: //g' | sed 's/ SOL//g' | awk '{n += $1}; END{print 0+n+0}' | bc`
+	ACTIVATING_STAKE_COUNT=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep 'Activating Stake: ' | sed 's/Activating Stake: //g' | sed 's/ SOL//g' | grep '' -c`
+	
+	DEACTIVATING_STAKE=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B1 -i 'deactivates' | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | awk '{n += $1}; END{print 0+n+0}' | bc`
+	DEACTIVATING_STAKE_COUNT=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B1 -i 'deactivates' | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | grep '' -c`
+
+	NO_MOVING_STAKE=`echo "${TOTAL_ACTIVE_STAKE:-0} ${DEACTIVATING_STAKE:-0}" | awk '{print $1 - $2}' | bc`
+
+	TOTAL_ACTIVE_STAKE_COUNT=`echo "${TOTAL_STAKE_COUNT:-0} ${ACTIVATING_STAKE_COUNT:-0}" | awk '{print $1 - $2}'`
+
+	BOT_ACTIVE_STAKE=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 -E "mvines|mpa4abUk" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | awk '{n += $1}; END{print 0+n+0}' | bc`
+	BOT_ACTIVE_STAKE_CLR=`echo -e "${BOT_ACTIVE_STAKE:-0}" | awk '{if(NR=0) print 0; else print'} | awk '{ if ($1 >= 0.9) print gr$1" SOL"nc; else print rd$1" SOL"nc; fi }' gr=$GREEN rd=$RED nc=$NOCOLOR`
+	BOT_ACTIVE_STAKE_COUNT=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 -E "mvines|mpa4abUk" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | grep '' -c`
+	
+	if [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+		MINIMUM_SECRET_STAKE=`echo "0.5" | bc`
+	else
+		MINIMUM_SECRET_STAKE=0
+	fi
+	SECRET_ACTIVE_STAKE=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 -E "EhYXq3ANp5nAerUpbSgd7VK2RRcxK1zNuSQ755G5Mtxx" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | sed 's/ //g' | awk '{n += $1}; END{print 0+n+0}' | bc`
+	SECRET_ACTIVE_STAKE_CLR=`echo -e "${SECRET_ACTIVE_STAKE:-0}" | awk '{if(NR=0) print 0; else print'} | awk '{ if (($1 > 0)) print gr$1" SOL"nc; else print rd$1" SOL"nc; fi }' gr=$GREEN rd=$RED nc=$NOCOLOR`
+	SECRET_ACTIVE_STAKE_COUNT=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 -E "EhYXq3ANp5nAerUpbSgd7VK2RRcxK1zNuSQ755G5Mtxx" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | grep '' -c`
+	SECRET_ACTIVE_TEXT=`echo -e "| Un-known Fund(${SECRET_ACTIVE_STAKE_COUNT:-0}) ${SECRET_ACTIVE_STAKE_CLR} "`
+	if [[ "${MINIMUM_SECRET_STAKE:-0}" == "0" ]]; then
+		SECRET_ACTIVE_TEXT=""
+	fi
+	
+	POOL_ACTIVE_TEXT="| "
+	POOL_ACTIVE_STAKE_SUM=0
+	POOL_ACTIVE_STAKE_COUNT_SUM=0
+	STAKE_POOLS_NAMES=(MARINADE SOCEAN JPOOL EVERSOL BLAZESTAKE LIDO DAOPOOL)
+	STAKE_POOLS_WTHDR=("9eG63CdHjsfhHmobHgLtESGC8GabbmRcaSpHAZrtmhco" "AzZRvyyMHBm8EHEksWxq4ozFL7JxLMydCDMGhqM6BVck" "HbJTxftxnXgpePCshA8FubsRj9MW4kfPscfuUfn44fnt" "C4NeuptywfXuyWB9A7H7g5jHVDE8L6Nj2hS53tA71KPn" "6WecYymEARvjG5ZyqkrVQ6YkhPfujNzWpSPwNKXHCbV2" "W1ZQRwUfSkDKy2oefRBUWph82Vr2zg9txWMA8RQazN5" "BbyX1GwUNsfbcoWwnkZDo8sqGmwNDzs2765RpjyQ1pQb")
+	for i in ${!STAKE_POOLS_WTHDR[@]}; do
+	  	POOL_ACTIVE_STAKE=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 -E "${STAKE_POOLS_WTHDR[$i]}" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | sed 's/ //g' | awk '{n += $1}; END{print 0+n+0}' | bc`
+		POOL_ACTIVE_STAKE_CLR=`echo -e "${POOL_ACTIVE_STAKE:-0}" | awk '{ if (($1 > 0)) print gr$1" SOL"nc; else print rd$1" SOL"nc; fi }' gr=$GREEN rd=$RED nc=$NOCOLOR`
+		POOL_ACTIVE_STAKE_COUNT=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 -E "${STAKE_POOLS_WTHDR[$i]}" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | grep '' -c`
+		POOL_ACTIVE_TEXT_ADD=`echo -e "| ${STAKE_POOLS_NAMES[$i]}(${POOL_ACTIVE_STAKE_COUNT:-0}) ${POOL_ACTIVE_STAKE_CLR} "`
+		if [[ "${POOL_ACTIVE_STAKE:-0}" == "0" ]]; then
+			POOL_ACTIVE_TEXT_ADD=""
+		fi
+		POOL_ACTIVE_TEXT=`echo -e "${POOL_ACTIVE_TEXT:-}${POOL_ACTIVE_TEXT_ADD:-}| "`
+		POOL_ACTIVE_STAKE_SUM=`echo -e "${POOL_ACTIVE_STAKE_SUM:-0}  ${POOL_ACTIVE_STAKE:-0}" | awk '{print $1 + $2}'`
+		POOL_ACTIVE_STAKE_COUNT_SUM=`echo -e "${POOL_ACTIVE_STAKE_COUNT_SUM:-0}  ${POOL_ACTIVE_STAKE_COUNT:-0}" | awk '{print $1 + $2}'`
+	done
+	
+	if [[ `echo -e "$POOL_ACTIVE_TEXT" | sed 's/ //g' | sed 's/|//g' ` == "" ]]; then
+		POOL_ACTIVE_TEXT=""
+	fi
+	
+	POOL_ACTIVE_TEXT=`echo -e ${POOL_ACTIVE_TEXT} | sed 's/| |/|/g'`
+
+	SELF_ACTIVE_STAKE=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 'Withdraw Authority: '${NODE_WITHDRAW_AUTHORITY} | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | awk '{n += $1}; END{print 0+n+0}'`
+	if [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+		MINIMUM_SELF_STAKE=100
+	else
+		MINIMUM_SELF_STAKE=0
+	fi
+	
+	SELF_ACTIVE_STAKE_CLR=`echo -e "${SELF_ACTIVE_STAKE:-0}" | awk '{if(NR=0) print 0; else print'} | awk '{ if (($1 >= $MINIMUM_SELF_STAKE)) print gr$1" SOL"nc; else print rd$1" SOL"nc; fi }' gr=$GREEN rd=$RED nc=$NOCOLOR`
+	SELF_ACTIVE_STAKE_COUNT=`echo -e "${SOLANA_STAKES_THIS_NODE}" | grep -B7 'Withdraw Authority: '${NODE_WITHDRAW_AUTHORITY} | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | grep '' -c`
+
+	OTHER_ACTIVE_STAKE=`echo "${TOTAL_ACTIVE_STAKE:-0} ${BOT_ACTIVE_STAKE:-0} ${SECRET_ACTIVE_STAKE:-0} ${POOL_ACTIVE_STAKE_SUM:-0} ${SELF_ACTIVE_STAKE:-0}" | awk '{print $1 - $2 - $3 - $4 - $5}' | bc`
+	OTHER_ACTIVE_STAKE_COUNT=`echo "${TOTAL_ACTIVE_STAKE_COUNT:-0} ${BOT_ACTIVE_STAKE_COUNT:-0} ${SECRET_ACTIVE_STAKE_COUNT:-0} ${POOL_ACTIVE_STAKE_COUNT_SUM:-0} ${SELF_ACTIVE_STAKE_COUNT:-0}" | awk '{print $1 - $2 - $3 - $4 - $5}'`
+	
+	
+	CURRENT_STAKE_ACTION=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.state_action'`
+#| tr '-' '\n     | '
+	#echo -ne '\n'
+	
+	echo -e "${CYAN}"
+	echo -e "Current Stake ${NOCOLOR}"
+	
+	echo -e "${LIGHTPURPLE}Last Bot Stake Action:${NOCOLOR} In epoch ${LAST_EPOCH} ${CURRENT_STAKE_ACTION}${NOCOLOR}"
+	
+	echo -e "Stake Total: Active(${TOTAL_ACTIVE_STAKE_COUNT:-0}) ${TOTAL_ACTIVE_STAKE:-0} SOL | From Bot(${BOT_ACTIVE_STAKE_COUNT:-0}) ${BOT_ACTIVE_STAKE_CLR} ${SECRET_ACTIVE_TEXT:-}${POOL_ACTIVE_TEXT:-}| Self-Stake(${SELF_ACTIVE_STAKE_COUNT:-0}) ${SELF_ACTIVE_STAKE_CLR} | Other(${OTHER_ACTIVE_STAKE_COUNT:-0}) ${OTHER_ACTIVE_STAKE} SOL" | sed 's/|\( *|\)*/|/g'
+	echo -e "Stake Moving: no-moving ${NO_MOVING_STAKE:-0} SOL | activating  ${ACTIVATING_STAKE:-0} SOL | deactivating ${DEACTIVATING_STAKE:-0} SOL"
+	
+}
+
+
+function Node_Stake_AllStakers_4 () {
+	NODE_WITHDRAW_AUTHORITY=`solana ${SOLANA_CLUSTER} vote-account ${YOUR_VOTE_ACCOUNT} | grep 'Withdraw' | awk '{print $NF}'`
+
+	ALL_MY_STAKES=`solana ${SOLANA_CLUSTER} stakes ${YOUR_VOTE_ACCOUNT}`
+	while [[ $? != 0 ]]; do
+		ALL_MY_STAKES=`solana ${SOLANA_CLUSTER} stakes ${YOUR_VOTE_ACCOUNT}`
+	done
+
+	ALL_STAKERS_KEYS_PAIRS=`echo "$ALL_MY_STAKES" | grep -E -B1 "Withdraw" | grep -oP "(?<=Stake Authority: ).*|(?<=Withdraw Authority: ).*" | paste -d '+' - - | sort | uniq`
+
+	#echo -e "${DARKGRAY}All Stakers of $YOUR_VOTE_ACCOUNT | Epoch ${THIS_EPOCH} ${CLUSTER_NAME}${NOCOLOR}"
+
+	DONE_STAKES=""
+	ALL_STAKES_SORTED=""
+	for i in $ALL_STAKERS_KEYS_PAIRS; do
+		RES=$(check_key_pair "$DONE_STAKES" "$i")
+		if [[ "$RES" == "" ]]; then
+			continue
+		fi
+		
+		KEY_TYPE_NAME=$(echo $RES | cut -d'^' -f1)
+		DONE_STAKES=$(echo $RES | cut -d'^' -f2)
+		
+		KEY=$(echo $KEY_TYPE_NAME | cut -d' ' -f1)
+		TYPE=$(echo $KEY_TYPE_NAME | cut -d' ' -f2)
+		NAME=$(echo $KEY_TYPE_NAME | cut -d' ' -f3)
+		
+		# Визначення значення count
+		count=$(echo "$ALL_MY_STAKES" | grep -B7 -E $KEY | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | wc -l)
+
+		# Заповнення асоціативного масиву з даними
+		data["$KEY"]=$count:$NAME:$(
+			echo "$ALL_MY_STAKES" | grep -B7 -E $KEY | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | awk '{n+=0+$1+0}; END{print 0+n+0}' | sed -r 's/^(.{7}).+$/\1/'
+		):$(
+			echo "$ALL_MY_STAKES" | grep -B7 -E $KEY | grep -B1 -i 'deactivates' | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | awk '{n+=0+$1+0}; END{print 0+n+0}' | sed -r 's/^(.{7}).+$/\1/'
+		):$(
+			echo "$ALL_MY_STAKES" | grep -B7 -E $KEY | grep 'Activating Stake' | sed 's/Activating Stake: //g' | sed 's/ SOL//g' | bc | awk '{n+=0+$1+0}; END{print 0+n+0}' | sed -r 's/^(.{7}).+$/\1/'
+		)
+	done
+
+
+	# Виклик функції для сортування за вибраним стовпчиком (наприклад, за Active Stake)
+
+	#echo -e "—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————"
+
+	echo -e "${DARKGRAY}All Stakers of Node\t\t\t\tCount\tInfo\t\tActive Stake\tDeactivating\tActivating${NOCOLOR}"
+
+	sort_data "${SORTING_CRITERIAS[@]}"
+
+	#sort_data 4:DESC 6:DESC
+	#sort_data 6:DESC 4:DESC 1:DESC 3:ASC
+
+	TOTAL_ACTIVE_STAKE=`echo -e "${ALL_MY_STAKES}" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | awk '{n += $1}; END{print n}' | bc`
+	TOTAL_STAKE_COUNT=`echo -e "${ALL_MY_STAKES}" | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | wc -l`
+
+	ACTIVATING_STAKE=`echo -e "${ALL_MY_STAKES}" | grep 'Activating Stake: ' | sed 's/Activating Stake: //g' | sed 's/ SOL//g' | bc | awk '{n += $1}; END{print n}' | bc | sed -r 's/^(.{7}).+$/\1/'`
+	ACTIVATING_STAKE_COUNT=`echo -e "${ALL_MY_STAKES}" | grep 'Activating Stake: ' | sed 's/Activating Stake: //g' | sed 's/ SOL//g' | bc | wc -l`
+
+	DEACTIVATING_STAKE=`echo -e "${ALL_MY_STAKES}" | grep -B1 -i 'deactivates' | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | awk '{n += $1}; END{print n}' | bc | sed -r 's/^(.{7}).+$/\1/'`
+	DEACTIVATING_STAKE_COUNT=`echo -e "${ALL_MY_STAKES}" | grep -B1 -i 'deactivates' | grep 'Active Stake' | sed 's/Active Stake: //g' | sed 's/ SOL//g' | bc | wc -l`
+
+	TOTAL_ACTIVE_STAKE_COUNT=`echo "${TOTAL_STAKE_COUNT:-0} ${ACTIVATING_STAKE_COUNT:-0}" | awk '{print $1 - $2}' | bc`
+
+	#echo -e "—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————"
+	echo -e "${UNDERLINE}${NOCOLOR}TOTAL:\t\t\t\t\t\t${TOTAL_ACTIVE_STAKE_COUNT}\t${LIGHTPURPLE}${UNDERLINE}\t\t${CYAN}${UNDERLINE}${TOTAL_ACTIVE_STAKE:-0}\t\t${RED}${UNDERLINE}${DEACTIVATING_STAKE:-0}\t\t${GREEN}${UNDERLINE}${ACTIVATING_STAKE:-0}${NOCOLOR}"
+
+}
+
+
+function SFDP_5 () {
+
+	KYC_API_VERCEL=`curl -s 'https://kyc-api.vercel.app/api/validators/list?offset=0&limit=15&order_by=name&order=asc&search_term='${THIS_SOLANA_ADRESS}`
+	
+	SFDP_FULL_STATUS=$(solana-foundation-delegation-program status ${THIS_SOLANA_ADRESS}  > /dev/null 2>&1)
+	SFDP_STATUS=`echo -e "${SFDP_FULL_STATUS}" | grep 'State: ' | sed 's/State: //g'`
+	
+	if [[ SFDP_STATUS="" ]]; then
+		SFDP_STATUS=`echo "${KYC_API_VERCEL}" | jq -r '.data[0].state'`
+	fi
+	
+	if [[ SFDP_FULL_STATUS="" ]]; then
+		SFDP_FULL_STATUS=`echo "Testnet Key:" $(echo "${KYC_API_VERCEL}" | jq -r '.data[0].testnetPubkey')
+		echo "Mainnet Key:" $(echo "${KYC_API_VERCEL}" | jq -r '.data[0].mainnetBetaPubkey')
+		echo "Participant Pubkey:" $(echo "${KYC_API_VERCEL_3}" | jq -r '.participantPubkey')`
+	fi
+	
+	KYC_STATUS=`echo "${KYC_API_VERCEL_3}" | jq -r '.kycStatus'`
+	KYC_REQ_BY=`echo "${KYC_API_VERCEL_3}" | jq -r '.kycRequiredBy'`
+	
+	TDS22ENROLLED=`echo "${KYC_API_VERCEL_3}" | jq -r '.tds22Enrolled'`
+	TDS22SIGNUPDATE=`echo "${KYC_API_VERCEL_3}" | jq -r '.tds22SignupDate'`
+	
+	TDS_GROUP=`echo "${KYC_API_VERCEL}" | jq -r '.data[0].tds_onboarding_group'`
+	
+	ONBOARDING_NUMBER=`echo "${KYC_API_VERCEL}" | jq -r '.data[0].onboardingNumber'`
+	ONBOARDING_WEEK=`echo -e "$ONBOARDING_NUMBER" | awk '{print ($1/25.00)}' | awk '{printf("%.1f\n",$1)}'`
+	
+	CURRENT_STAKE_STATE=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.state'`
+	CURRENT_STAKE_REASON=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.state_reason'`
+	
+	METRICS_LAST_EPOCH_TRUE_FALSE=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.self_reported_metrics.pass'`
+	METRICS_LAST_EPOCH=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.self_reported_metrics.reason'`
+	
+	METRICS_SUMMARY_TRUE_FALSE=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.self_reported_metrics_summary.pass'`
+	METRICS_SUMMARY_RAW=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.self_reported_metrics_summary.reason'`
+	COLOR_METRICS=`if [[ "${METRICS_SUMMARY_TRUE_FALSE}" == "true" ]];
+			then
+				if [[ $METRICS_SUMMARY_RAW == *"10/10"* ]];
+				then
+					echo "${GREEN}"
+				else
+					echo "${YELLOW}"
+				fi
+			else
+			  echo "${RED}"
+			fi`
+
+	METRICS_SUMMARY=`echo "${COLOR_METRICS}"``echo "${METRICS_SUMMARY_RAW}"``echo "${NOCOLOR}"`
+	
+	TESTNET_PERFORMANCE=`echo "${KYC_API_VERCEL}" | jq -r '.data[0].tn_calculated_stats.num_bonus_last_10'`
+	
+	COLOR_TESTNET_PERFORMANCE=`
+		if (( $(bc<<<"scale=0;${TESTNET_PERFORMANCE} >= 8") )); then
+		  echo "${GREEN}"
+		elif (( $(bc<<<"scale=0;${TESTNET_PERFORMANCE} >= 5") )); then
+		  echo "${YELLOW}"
+		else
+		  echo "${RED}"
+		fi`
+		
+	COLOR_STAKE_STATE=`
+		if [[ "${CURRENT_STAKE_STATE}" == "Bonus" ]];
+		then
+		  echo "${GREEN}"
+		elif [[ "${CURRENT_STAKE_STATE}" == "Baseline" ]];
+		then
+		  echo "${YELLOW}"
+		else
+		  echo "${RED}"
+		fi`
+	
+	COLOR_SFDP_STATUS=`
+		if [[ "${SFDP_STATUS}" == "Rejected" ]];
+		then
+		  echo "${RED}"
+		else
+			if [[ "${SFDP_STATUS}" == "Approved" ]];
+			then
+			  echo "${GREEN}"
+			else
+			  echo "${LIGHTPURPLE}"
+			fi
+		fi`
+	SFDP_STATUS_STRING=`echo -e "State: ${COLOR_SFDP_STATUS}${SFDP_STATUS}${NOCOLOR}"`
+	SFDP=`echo -e "${SFDP_FULL_STATUS}" | grep -v "State: "`
+	
+	KYC_REQ_STRING=`
+		if [[ "${KYC_STATUS}" == "RE_KYC_REQUIRED" ]];
+		then
+		  echo " untill" $(date -d "${KYC_REQ_BY}" +"%F %T") ${SERVER_TIME_ZONE:-''}
+		fi`
+	COLOR_KYC_STATUS=`
+		if [[ "${KYC_STATUS}" == "RE_KYC_REQUIRED" ]];
+		then
+		  echo "${RED}REQUIRED"
+		else
+			if [[ "${KYC_STATUS}" == "KYC_VALID" ]];
+			then
+			  echo "${GREEN}VALID"
+			else
+			  echo "${LIGHTPURPLE}${KYC_STATUS}"
+			fi
+		fi`
+	KYC_STATUS_STRING=`echo -e "KYC Status: ${COLOR_KYC_STATUS}${NOCOLOR}${KYC_REQ_STRING}"`
+	
+	TDS22SIGNUPDATE_STRING=`
+		if [[ "${TDS22SIGNUPDATE}" != "null" ]];
+		then
+		  echo $(date -d "${TDS22SIGNUPDATE}" +"%F %T") ${SERVER_TIME_ZONE:-''}
+		fi`
+
+	#echo -ne '\n'
+	echo -e "${CYAN}"
+	echo -e "Foundation Delegation Program ${NOCOLOR}"
+	echo -e "${KYC_STATUS_STRING}"
+	echo -e "${SFDP_STATUS_STRING}"
+	if [[ "${TDS_GROUP}" != "null" ]] ; then
+		echo -e "TDS Group: ${TDS_GROUP}"
+	fi
+	if [[ "${ONBOARDING_NUMBER}" != "null" ]] ; then
+		echo -e "Current Onboarding Queue Number: ${LIGHTPURPLE}${ONBOARDING_NUMBER}${NOCOLOR} | ~${ONBOARDING_WEEK} weeks"
+	fi
+	echo -e "${SFDP}"
+
+	if [[ "${TESTNET_PERFORMANCE}" != "null" ]] ; then
+		echo -e "Current Testnet Performance: ${COLOR_TESTNET_PERFORMANCE}${TESTNET_PERFORMANCE}/10 ${NOCOLOR}"
+	fi
+	echo -e "Last Epoch State: ${COLOR_STAKE_STATE}${CURRENT_STAKE_STATE}: ${CURRENT_STAKE_REASON}${NOCOLOR}"
+	if [[ "${TDS22ENROLLED}" == "true" ]] ;
+	then
+		echo -e "TDS22 registration: ${GREEN}TRUE${NOCOLOR} from ${TDS22SIGNUPDATE_STRING}"
+	else
+		echo -e "TDS22 registration: ${RED}${TDS22ENROLLED}${NOCOLOR}"
+	fi
+	
+	
+	#echo -e "Metrics-Last-Epoch-${LAST_EPOCH}: ${METRICS_LAST_EPOCH}"
+	
+	if [[ "${METRICS_SUMMARY_RAW}" != "null" ]] ; then
+		echo -e "Metrics: ${METRICS_SUMMARY}"
+	fi
+}
+
+function Vote_Credits_6 () {
+	
+	YOUR_CREDITS=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.epochCredits'`
+	#YOUR_CREDITS=`solana ${SOLANA_CLUSTER} vote-account ${YOUR_VOTE_ACCOUNT} | grep -A 4 History | grep -A 2 epoch | grep credits/slots | cut -d ' ' -f 4 | cut -d '/' -f 1 | bc`
+	YOUR_CREDITS_PLACE=`solana validators ${SOLANA_CLUSTER} --sort=credits -r -n | grep ${THIS_SOLANA_ADRESS} | sed 's/⚠️/ /g' | awk '{print ($1)}' | sed 's/[[:blank:]]*$//'`
+	ALL_CREDITS_PLACES=`solana validators ${SOLANA_CLUSTER} --sort=credits -r -n | grep -A 999999999 Skip | grep -B 999999999 Skip | grep -v Skip | sed 's/[()⚠️]/ /g' | tr -s ' ' | tac | egrep -m 1 . | awk {'print $1'}`
+	#ALL_CLUSTER_CREDITS_LIST=`solana ${SOLANA_CLUSTER} validators | grep -A 999999999 Skip | grep -B 999999999 Skip | grep -v Skip | sed 's/(/ /g'| sed 's/)/ /g' | tr -s ' ' | sed 's/ /\n\r/g' | grep -v % | grep -i -v [a-z⚠️-] | egrep '^.{2,7}$' | grep -v -E '\.+[[:digit:]]\.+[[:digit:]]+$' | grep -v -E '^.{2,3}$'`
+	#SUM_CLUSTER_CREDITS=`echo -e "${ALL_CLUSTER_CREDITS_LIST}" | awk '{n += $1}; END{print n}'`
+	#COUNT_CLUSTER_VALIDATORS=`echo -e "${ALL_CLUSTER_CREDITS_LIST}" | wc -l | bc`
+	#CLUSTER_CREDITS=`echo -e "$SUM_CLUSTER_CREDITS" "$COUNT_CLUSTER_VALIDATORS" | awk '{print ($1/$2)}' `
+	CLUSTER_CREDITS=`solana ${SOLANA_CLUSTER} validators --output json-compact | jq --arg ID ${THIS_SOLANA_ADRESS} '.validators[]' | jq -r .epochCredits | awk '{n += $1; y += 1}; END{print n/y}'`
+	
+	PERCENT_CREDITS=`echo "${YOUR_CREDITS:-0} ${CLUSTER_CREDITS:-0} ${CLUSTER_CREDITS:-1}" | awk '{print 100 * ($1 - $2) / $3}' | awk '{printf("%.2f\n",$1)}'`
+	
+	PERCENT_SIGN=`
+		if (( $(bc<<<"scale=2;${PERCENT_CREDITS} >= 0.0") ));
+		then
+		  echo "+"
+		else
+		  echo ""
+		fi`
+	
+	#echo -ne '\n'
+	echo -e "${CYAN}"
+	echo -e "Vote-Credits ${NOCOLOR}"
+	
+	echo -e "Average cluster credits: ${CLUSTER_CREDITS:-0} (minus grace 3%: $(bc<<<"scale=0;${CLUSTER_CREDITS:-0}*0.97"))"
+
+	if (( $(bc<<<"scale=0;${YOUR_CREDITS:-0} >= ${CLUSTER_CREDITS:-0}*0.97"))); then
+		if (( $(bc<<<"scale=0;${YOUR_CREDITS:-0} >= ${CLUSTER_CREDITS:-0}"))); then
+			echo -e "${GREEN}Your credits: ${YOUR_CREDITS} (Good) | ${PERCENT_SIGN}${PERCENT_CREDITS}% from average${NOCOLOR}"
+		else
+			echo -e "${YELLOW}Your credits: ${YOUR_CREDITS} (Good) | ${PERCENT_SIGN}${PERCENT_CREDITS}% from average${NOCOLOR}"
+		fi
+	else
+	  echo -e "${RED}Your credits: ${YOUR_CREDITS} (Bad) | ${PERCENT_SIGN}${PERCENT_CREDITS}% from average${NOCOLOR}"
+	fi
+	echo -e "Your epoch credit rating: # ${YOUR_CREDITS_PLACE} / ${ALL_CREDITS_PLACES} "
+	#("${COUNT_CLUSTER_VALIDATORS} with non-zero credits)"
+	
+	cluster_vote_credits_statistic 10
+	#time_to_credits $YOUR_CREDITS $average_avg_credits "full"
+	time_to_credits $YOUR_CREDITS $max_avg_credits "full"
+
+	#echo -e "Max-Possible Cluster Credits are 432000 (minus grace 3%: $(bc<<<"scale=2;432000*0.97"))"
+	#
+	#if (( $(bc<<<"scale=2;${YOUR_CREDITS:-0} >= 432000*0.97") )); then
+	#  echo -e "${GREEN}Your Node fulfilled the maximum plan!${NOCOLOR}"
+	#else
+	#  echo -e "Your Node not yet fulfilled the maximum plan: $(bc<<<"scale=2;432000*0.97-${YOUR_CREDITS:-0}") | ${YELLOW}$(bc<<<"scale=2;100-100*${YOUR_CREDITS:-0}/(432000*0.97)")% remains${NOCOLOR}"
+	#fi
+}
+
+function Skiprate_7 () {
+	
+
+
+	CLUSTER_SKIP=`echo -e "$(solana validators ${SOLANA_CLUSTER} --output json-compact | jq .averageStakeWeightedSkipRate)" | awk '{printf("%.2f\n",$1)}'`
+	
+	CLUSTER_SKIP_AVERAGE=`echo -e "$(solana validators ${SOLANA_CLUSTER} --output json-compact | jq .averageSkipRate)" | awk '{printf("%.2f\n",$1)}'`
+	
+	
+	THIS_BLOCK_PRODUCTION=`solana ${SOLANA_CLUSTER} -v block-production | grep ${THIS_SOLANA_ADRESS}`
+
+	ALL_SLOTS=`solana ${SOLANA_CLUSTER} leader-schedule | grep ${THIS_SOLANA_ADRESS} -c | awk '{if ($1==0) print 1; else print $1;}'`
+	SKIPPED_COUNT=`echo -e "${THIS_BLOCK_PRODUCTION}" | grep SKIPPED -c`
+	NON_SKIPPED_COUNT=`echo -e "${THIS_BLOCK_PRODUCTION}" | grep SKIPPED -v -c | awk '{ if ($1 > 0) print $1-1; else print 0; fi}'`
+
+	SCHEDULE1=`solana ${SOLANA_CLUSTER} leader-schedule | grep ${THIS_SOLANA_ADRESS} | tr -s ' ' | cut -d' ' -f2`
+	CURRENT_SLOT1=`echo -e "$EPOCH_INFO" | grep "Slot: " | cut -d ':' -f 2 | cut -d ' ' -f 2`
+	COMPLETED_SLOTS1=`echo -e "${SCHEDULE1}" | awk -v cs1="${CURRENT_SLOT1:-0}" '{ if ( ! -z "$1" ) if ($1 <= cs1) { print }}' | wc -l`
+	REMAINING_SLOTS1=`echo -e "${SCHEDULE1}" | awk -v cs1="${CURRENT_SLOT1:-0}" '{ if ( ! -z "$1" ) if ($1 > cs1) { print }}' | wc -l`
+
+	YOUR_SKIPRATE=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.skipRate' | awk '{printf("%.2f\n",$1)}'`
+	#YOUR_SKIPRATE=`echo -e "${THIS_BLOCK_PRODUCTION}" | sed -n -e 1p | sed 's/  */ /g' | sed '/^#\|^$\| *#/d' | cut -d ' ' -f 6 | cut -d '%' -f 1 | awk '{print $1}'`
+
+	NEAREST_SLOTS=`echo -e "${SEE_SHEDULE_VAR}" | grep -m1 -A11 "new>" | sed -n -e 1p -e 5p -e 9p | sed 's/End: /End of epoch:/g' | sed 's/new> //g' | tr -s ' ' | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g'`
+	LAST_BLOCK=`echo -e "${SEE_SHEDULE_VAR}" | grep "old<" | tail -n1 | sed 's/old< //g' | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g'`
+	LAST_BLOCK_STATUS=`echo -e "${THIS_BLOCK_PRODUCTION}" | tail -n2 | tr -s ' ' | sed 's/ /\n\r/g' | sed '/^$/d' | grep -i 'skipped' -c | awk {'if ($1==0) print "DONE"; else print "SKIPPED"'}`
+	COLOR_LAST_BLOCK=`
+		if [[ "${LAST_BLOCK_STATUS}" == "SKIPPED" ]];
+		then
+		  echo "${RED}"
+		else
+		  echo "${GREEN}"
+		fi`
+		
+	
+	#echo -ne '\n'
+	echo -e "${CYAN}"
+	echo -e "Skip Rate ${NOCOLOR}"
+
+	echo -e "Average cluster skiprate: ${CLUSTER_SKIP}% (plus grace 30%: $(bc<<<"scale=2;${CLUSTER_SKIP:-0}+30")%) | AVG ${CLUSTER_SKIP_AVERAGE}%"
+
+	if (( $(bc<<<"scale=2;${YOUR_SKIPRATE:-0} > ${CLUSTER_SKIP:-0}+30"))); then
+	  echo -e "${RED}Your skiprate: ${YOUR_SKIPRATE:-0}% (Bad) - Done: ${NON_SKIPPED_COUNT:-0}, Skipped: ${SKIPPED_COUNT:-0}${NOCOLOR}"
+	elif (( $(bc<<<"scale=2;${YOUR_SKIPRATE:-0} >= ${CLUSTER_SKIP:-0}+20"))); then
+	  echo -e "${YELLOW}Your skiprate: ${YOUR_SKIPRATE:-0}% (Good) - Done: ${NON_SKIPPED_COUNT:-0}, Skipped: ${SKIPPED_COUNT:-0}${NOCOLOR}"
+	else
+	  echo -e "${GREEN}Your skiprate: ${YOUR_SKIPRATE:-0}% (Good) - Done: ${NON_SKIPPED_COUNT:-0}, Skipped: ${SKIPPED_COUNT:-0}${NOCOLOR}"
+	fi
+
+	if (("${COMPLETED_SLOTS1:-0}" != '1' && "${ALL_SLOTS:-0}" != '1')); then
+
+		echo "Your Slots ${COMPLETED_SLOTS1:-0}/${ALL_SLOTS:-0} (${REMAINING_SLOTS1:-0} remaining)"
+
+
+		#min-skip
+		if (( $(bc<<<"scale=2;${SKIPPED_COUNT:-0}*100/${ALL_SLOTS:-1} <= ${CLUSTER_SKIP:-0}+30") )); then
+			echo -e "Your Min-Possible Skiprate is ${GREEN}$(bc<<<"scale=2;${SKIPPED_COUNT:-0}*100/${ALL_SLOTS:-1}")%${NOCOLOR} (if all remaining slots will be done)"
+		else
+			echo -e "Your Min-Possible Skiprate is ${RED}$(bc<<<"scale=2;${SKIPPED_COUNT:-0}*100/${ALL_SLOTS:-1}")%${NOCOLOR} (if all remaining slots will be done)"
+		fi
+
+		#max-skip
+		if (( $(bc<<<"scale=2;(${ALL_SLOTS:-0}-${NON_SKIPPED_COUNT:-0})*100/${ALL_SLOTS:-1} <= ${CLUSTER_SKIP:-0}+30") )); then
+			echo -e "Your Max-Possible Skiprate is ${GREEN}$(bc<<<"scale=2;(${ALL_SLOTS:-0}-${NON_SKIPPED_COUNT:-0})*100/${ALL_SLOTS:-1}")%${NOCOLOR} (if all remaining slots will be skipped)"
+		else
+			echo -e "Your Max-Possible Skiprate is ${RED}$(bc<<<"scale=2;(${ALL_SLOTS:-0}-${NON_SKIPPED_COUNT:-0})*100/${ALL_SLOTS:-1}")%${NOCOLOR} (if all remaining slots will be skipped)"
+		fi
+		
+		echo -e "${CYAN}"
+		echo -e "Block Production ${NOCOLOR}"
+
+		if (( $(bc<<<"scale=2;${COMPLETED_SLOTS1:-0} > 0"))); then
+			echo -e "Last Block: ${COLOR_LAST_BLOCK}${LAST_BLOCK} ${LAST_BLOCK_STATUS}${NOCOLOR}"
+		else
+			echo -e "This node did not produce any blocks yet"
+		fi
+
+		if (( $(bc<<<"scale=2;${REMAINING_SLOTS1:-0} > 0"))); then
+			echo -e "Nearest Slots (4 blocks each):"
+			echo -e "${GREEN}${NEAREST_SLOTS}${NOCOLOR}"
+		else
+			echo -e "This node will not have new blocks in this epoch"
+		fi
+		
+	else
+		echo -e "${LIGHTPURPLE}This node don't have blocks in this epoch${NOCOLOR}"
+	fi
+}
+
+function Last_Rewards_8 () {
+
+	# LAST_REWARDS_RAW_JSON=$(solana -um vote-account --with-rewards --num-rewards-epochs 5 --output json ${YOUR_VOTE_ACCOUNT} 2>/dev/null | jq -r '.epochRewards[]' 2>/dev/null)
+	
+	# LAST_REWARDS_RAW_JSON_EPOCHS=(`echo -e "${LAST_REWARDS_RAW_JSON}" | jq -r '.epoch'`)
+	# LAST_REWARDS_RAW_JSON_AMOUNT=(`echo -e "${LAST_REWARDS_RAW_JSON}" | jq -r '.amount' | awk '{print ($1/(1000000000))}' | bc`)
+	
+	# for((t=0;t<${#LAST_REWARDS_RAW_JSON_EPOCHS[@]};t++)); do
+		# LAST_REWARDS_JSON+=`echo -ne "Epoch ${LAST_REWARDS_RAW_JSON_EPOCHS[t]} - ${LAST_REWARDS_RAW_JSON_AMOUNT[t]} "`
+		# LAST_REWARDS_JSON+="\n"
+	# done
+
+	# echo -e "${CYAN}"
+	# echo -e "Last Rewards ${NOCOLOR}"
+	# echo -e "${LAST_REWARDS_JSON:-${LIGHTPURPLE}No rewards yet ${NOCOLOR}}"
+	
+	
+	LAST_REWARDS_RAW_JSON=$(solana -um vote-account --with-rewards --num-rewards-epochs 5 --output json ${YOUR_VOTE_ACCOUNT} 2>/dev/null | jq -r '.epochRewards[]' 2>/dev/null)
+	while [[ $? != 0 ]]; do
+		LAST_REWARDS_RAW_JSON=$(solana -um vote-account --with-rewards --num-rewards-epochs 5 --output json ${YOUR_VOTE_ACCOUNT} 2>/dev/null | jq -r '.epochRewards[]' 2>/dev/null)
+	done
+																																 # 2>&1
+	LAST_REWARDS_RAW_JSON_EPOCHS=(`echo -e "${LAST_REWARDS_RAW_JSON}" | jq -r '.epoch'`)
+	LAST_REWARDS_RAW_JSON_AMOUNT=(`echo -e "${LAST_REWARDS_RAW_JSON}" | jq -r '.amount' | awk '{print ($1/(1000000000))}' | bc`)
+	
+	for((t=0;t<${#LAST_REWARDS_RAW_JSON_EPOCHS[@]};t++)); do
+		LAST_REWARDS_JSON+=`echo -ne "Epoch ${LAST_REWARDS_RAW_JSON_EPOCHS[t]} - ${LAST_REWARDS_RAW_JSON_AMOUNT[t]} "`
+		LAST_REWARDS_JSON+="\n"
+	done
+	
+	echo -e "${CYAN}"
+	echo -e "Last Rewards ${NOCOLOR}"
+	echo -e "${LAST_REWARDS_JSON:-${LIGHTPURPLE}Cannot see rewards now ${NOCOLOR}}"
+}
+
+
+function Only_Important ()
+{
+	OPTIMISTIC_ARR[1]=`Optimistic_Slot_Now`
+	
+	EPOCH_NUMBER=`echo "$EPOCH_INFO" | grep 'Epoch: '`
+	END_OF_EPOCH=`echo -e "${SEE_SHEDULE_VAR}" | tail -n1 | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' | sed 's/End: /End of epoch:/g' | tr -s ' '`
+	EPOCH_REMAINS=`echo "$EPOCH_INFO" | grep 'Epoch Completed Time' | sed -n '/.*(/s///p' | sed 's/)//g' 2> /dev/null`
+	
+	echo -e ""
+	echo -e "Solana Price: "`solana_price`
+	
+	echo -e "${CYAN}$EPOCH_NUMBER | $END_OF_EPOCH$SERVER_TIME_ZONE| $EPOCH_REMAINS ${NOCOLOR}"
+
+	KYC_API_VERCEL=`curl -s 'https://kyc-api.vercel.app/api/validators/list?offset=0&limit=15&order_by=name&order=asc&search_term='${THIS_SOLANA_ADRESS}`
+	SFDP_STATUS=`echo "${KYC_API_VERCEL}" | jq -r '.data[0].state'`
+	COLOR_SFDP_STATUS=`
+		if [[ "${SFDP_STATUS}" == "Rejected" ]];
+		then
+		  echo "${RED}"
+		else
+			if [[ "${SFDP_STATUS}" == "Approved" ]];
+			then
+			  echo "${GREEN}"
+			else
+			  echo "${LIGHTPURPLE}"
+			fi
+		fi`
+	if [[ "${SFDP_STATUS}" == "null" ]];
+	then
+		SFDP_STATUS="Not SFDP Node"
+	fi
+	SFDP_STATUS_STRING=`echo -e ": ${COLOR_SFDP_STATUS}${SFDP_STATUS}${NOCOLOR}"`
+	
+	THIS_SOLANA_VALIDATOR_INFO=`solana ${SOLANA_CLUSTER} validator-info get | awk '$0 ~ sadddddr {do_print=1} do_print==1 {print} NF==0 {do_print=0}' sadddddr=$THIS_SOLANA_ADRESS`
+	
+	SOLANA_VALIDATORS=`solana ${SOLANA_CLUSTER} validators`
+	
+	NODE_NAME=`echo -e "${THIS_SOLANA_VALIDATOR_INFO}" | grep 'Name: ' | sed 's/Name//g' | tr -s ' '`
+	
+	NODE_COMMISSION=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.commission'`
+	if (( $(bc<<<"scale=0;${NODE_COMMISSION:-100} <= 10.0") )); then
+		NODE_COMMISSION="${GREEN}${NODE_COMMISSION}%${NOCOLOR}"
+	else
+		if [[ "${CLUSTER_NAME}" != "(Mainnet)" ]]; then
+			NODE_COMMISSION="${GREEN}${NODE_COMMISSION}%${NOCOLOR}"
+		else
+			NODE_COMMISSION="${RED}${NODE_COMMISSION}%${NOCOLOR}"
+		fi
+	fi
+	
+	KYC_STATUS=`echo "${KYC_API_VERCEL_3}" | jq -r '.kycStatus'`
+	#KYC_REQ_BY=`echo "${KYC_API_VERCEL_3}" | jq -r '.kycRequiredBy'`
+	
+	TDS22ENROLLED=`echo "${KYC_API_VERCEL_3}" | jq -r '.tds22Enrolled'`
+	#TDS22SIGNUPDATE=`echo "${KYC_API_VERCEL_3}" | jq -r '.tds22SignupDate'`
+	
+	COLOR_KYC_STATUS=`
+		if [[ "${KYC_STATUS}" == "RE_KYC_REQUIRED" ]];
+		then
+		  echo "${RED}RE-KYC REQUIRED"
+		else
+			if [[ "${KYC_STATUS}" == "KYC_VALID" ]];
+			then
+			  echo "${GREEN}KYC VALID"
+			else
+			  echo "${LIGHTPURPLE}${KYC_STATUS}"
+			fi
+		fi`
+	KYC_STATUS_STRING=`echo -e "${COLOR_KYC_STATUS}${NOCOLOR}"`
+	
+	if [[ "${TDS22ENROLLED}" == "true" ]];
+		then
+			TDS22ENROLLED=`echo -e "${GREEN}TDS22 Registered${NOCOLOR}"`
+		else
+			TDS22ENROLLED=`echo -e "${NOCOLOR}TDS22 no registered${NOCOLOR}"`
+	fi
+	
+	echo -e "${BLUE}This Node${NODE_NAME} ${CLUSTER_NAME} ${NOCOLOR}${SFDP_STATUS_STRING} | ${NODE_COMMISSION} | ${TDS22ENROLLED} | ${KYC_STATUS_STRING}"
+	
+	IS_DELINKED=`echo -e "${SOLANA_VALIDATORS}" | grep ⚠️ | if (grep ${THIS_SOLANA_ADRESS} -c)>0; then echo -e "WARNING: ${RED}THIS NODE IS DELINKED\n\rconsider to check catchup, network connection and/or messages from your datacenter${NOCOLOR}"; else >/dev/null; fi`
+	
+	echo -e "${IS_DELINKED}" | awk 'length > 5'
+
+	NODE_WITHDRAW_AUTHORITY=`solana ${SOLANA_CLUSTER} vote-account ${YOUR_VOTE_ACCOUNT} | grep 'Withdraw' | awk '{print $NF}'`
+	IDACC_BALANCE=`solana ${SOLANA_CLUSTER} balance ${THIS_SOLANA_ADRESS} | sed 's/ SOL//g' `
+	VOTEACC_BALANCE=`solana ${SOLANA_CLUSTER} balance ${YOUR_VOTE_ACCOUNT}`
+	WITHDR_BALANCE=`solana ${SOLANA_CLUSTER} balance ${NODE_WITHDRAW_AUTHORITY}`
+	
+	if (( $(bc<<<"scale=0;${IDACC_BALANCE:-0} >= 1.8") )); then
+		echo -e "Identity:   ${THIS_SOLANA_ADRESS} | ${GREEN}${IDACC_BALANCE:-0} SOL${NOCOLOR}"
+	else
+		echo -e "Identity:   ${THIS_SOLANA_ADRESS} | ${RED}${IDACC_BALANCE:-0} SOL${NOCOLOR}"
+	fi
+	echo -e "VoteKey:    ${YOUR_VOTE_ACCOUNT} | ${VOTEACC_BALANCE}"
+	echo -e "Withdrawer: ${NODE_WITHDRAW_AUTHORITY} | ${WITHDR_BALANCE}"
+	
+	
+	SOLANA_VERSION=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.version'`
+	
+	MAJOR_CLUSTER_VERSION=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k6 -nr | sed 1q | awk '{print $1}'`
+	#MAJOR_CLUSTER_VERSION_PERCENT=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k6 -nr | sed 1q | awk '{print $6}'`
+	
+	MAJOR_CLUSTER_VERSION_BY_POPULATION=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k3 -nr | sed 1q | awk '{print $1}'`
+	#MAJOR_CLUSTER_VERSION_POPULATION=`echo -e "${SOLANA_VALIDATORS}" | grep -A99 "Stake By Version:" | sed 's/[()]/ /g' | tail -n +2 | sort -k3 -nr | sed 1q | awk '{print $3}'`
+	
+	if [[ "${SOLANA_VERSION}" == "${MAJOR_CLUSTER_VERSION_BY_POPULATION}" ]]; then
+		echo -e "Solana version: " | tr -d '\r\n' && echo -e "${GREEN}${SOLANA_VERSION}${NOCOLOR} (Majority ${MAJOR_CLUSTER_VERSION_BY_POPULATION}${NOCOLOR})"
+	else
+		echo -e "Solana version: " | tr -d '\r\n' && echo -e "${RED}${SOLANA_VERSION}${NOCOLOR} (Majority ${MAJOR_CLUSTER_VERSION_BY_POPULATION}${NOCOLOR})"
+	fi
+	
+OPTIMISTIC_ARR[3]=`Optimistic_Slot_Now 5`
+	
+	
+	
+	ONBOARDING_NUMBER=`echo "${KYC_API_VERCEL}" | jq -r '.data[0].onboardingNumber'`
+	ONBOARDING_WEEK=`echo -e "$ONBOARDING_NUMBER" | awk '{print ($1/25.00)}' | awk '{printf("%.1f\n",$1)}'`
+	
+	if [[ "${ONBOARDING_NUMBER}" != "null" ]] ; then
+		echo -e "Current Onboarding Queue Number: ${LIGHTPURPLE}${ONBOARDING_NUMBER}${NOCOLOR} | ~${ONBOARDING_WEEK} weeks"
+	fi
+	
+	YOUR_CREDITS=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.epochCredits'`
+	
+	CLUSTER_CREDITS=`solana ${SOLANA_CLUSTER} validators --output json-compact | jq --arg ID ${THIS_SOLANA_ADRESS} '.validators[]' | jq -r .epochCredits | awk '{n += $1; y += 1}; END{print n/y}'`
+	
+	PERCENT_CREDITS=`echo "${YOUR_CREDITS:-0} ${CLUSTER_CREDITS:-0} ${CLUSTER_CREDITS:-1}" | awk '{print 100 * ($1 - $2) / $3}' | awk '{printf("%.2f\n",$1)}'`
+	
+	PERCENT_SIGN=`
+		if (( $(bc<<<"scale=2;${PERCENT_CREDITS} >= 0.0") ));
+		then
+		  echo "+"
+		else
+		  echo ""
+		fi`
+		
+	cluster_vote_credits_statistic 10
+	#time_to_credits $YOUR_CREDITS $average_avg_credits "full"
+	VOTE_PLAN=`echo -e $(time_to_credits $YOUR_CREDITS $max_avg_credits "short")`
+	
+	if (( $(bc<<<"scale=2;${YOUR_CREDITS:-0} >= ${CLUSTER_CREDITS:-0}*0.97"))); then
+		if (( $(bc<<<"scale=2;${YOUR_CREDITS:-0} >= ${CLUSTER_CREDITS:-0}"))); then
+			echo -e "${GREEN}Your credits: ${YOUR_CREDITS} (Good) | ${PERCENT_SIGN}${PERCENT_CREDITS}% from average${NOCOLOR} ${VOTE_PLAN}"
+		else
+			echo -e "${YELLOW}Your credits: ${YOUR_CREDITS} (Good) | ${PERCENT_SIGN}${PERCENT_CREDITS}% from average${NOCOLOR} ${VOTE_PLAN}"
+		fi
+	else
+	  echo -e "${RED}Your credits: ${YOUR_CREDITS} (Bad) | ${PERCENT_SIGN}${PERCENT_CREDITS}% from average${NOCOLOR} ${VOTE_PLAN}"
+	fi
+	
+OPTIMISTIC_ARR[4]=`Optimistic_Slot_Now`
+	
+	CLUSTER_SKIP=`echo -e "$(solana validators ${SOLANA_CLUSTER} --output json-compact | jq .averageStakeWeightedSkipRate)" | awk '{printf("%.2f\n",$1)}'`
+	
+	CLUSTER_SKIP_AVERAGE=`echo -e "$(solana validators ${SOLANA_CLUSTER} --output json-compact | jq .averageSkipRate)" | awk '{printf("%.2f\n",$1)}'`
+	
+	
+	THIS_BLOCK_PRODUCTION=`solana ${SOLANA_CLUSTER} -v block-production | grep ${THIS_SOLANA_ADRESS}`
+
+	ALL_SLOTS=`solana ${SOLANA_CLUSTER} leader-schedule | grep ${THIS_SOLANA_ADRESS} -c | awk '{if ($1==0) print 1; else print $1;}'`
+	SKIPPED_COUNT=`echo -e "${THIS_BLOCK_PRODUCTION}" | grep SKIPPED -c`
+	NON_SKIPPED_COUNT=`echo -e "${THIS_BLOCK_PRODUCTION}" | grep SKIPPED -v -c | awk '{ if ($1 > 0) print $1-1; else print 0; fi}'`
+	
+	SCHEDULE1=`solana ${SOLANA_CLUSTER} leader-schedule | grep ${THIS_SOLANA_ADRESS} | tr -s ' ' | cut -d' ' -f2`
+	CURRENT_SLOT1=`echo -e "$EPOCH_INFO" | grep "Slot: " | cut -d ':' -f 2 | cut -d ' ' -f 2`
+	COMPLETED_SLOTS1=`echo -e "${SCHEDULE1}" | awk -v cs1="${CURRENT_SLOT1:-0}" '{ if ( ! -z "$1" ) if ($1 <= cs1) { print }}' | wc -l`
+	REMAINING_SLOTS1=`echo -e "${SCHEDULE1}" | awk -v cs1="${CURRENT_SLOT1:-0}" '{ if ( ! -z "$1" ) if ($1 > cs1) { print }}' | wc -l`
+
+	YOUR_SKIPRATE=`echo -e "${THIS_VALIDATOR_JSON}" | jq -r '.skipRate' | awk '{printf("%.2f\n",$1)}'`
+	
+	if (("${COMPLETED_SLOTS1:-0}" != '1' && "${ALL_SLOTS:-0}" != '1')); then
+		
+		MIN_POS_SKIP=`if (( $(bc<<<"scale=2;${SKIPPED_COUNT:-0}*100/${ALL_SLOTS:-1} <= ${CLUSTER_SKIP:-0}+30") )); then
+			echo -e "${GREEN}min: $(bc<<<"scale=2;${SKIPPED_COUNT:-0}*100/${ALL_SLOTS:-1}")%${NOCOLOR}"
+		else
+			echo -e "${RED}min: $(bc<<<"scale=2;${SKIPPED_COUNT:-0}*100/${ALL_SLOTS:-1}")%${NOCOLOR}"
+		fi`
+		
+		MAX_POS_SKIP=`if (( $(bc<<<"scale=2;(${ALL_SLOTS:-0}-${NON_SKIPPED_COUNT:-0})*100/${ALL_SLOTS:-1} <= ${CLUSTER_SKIP:-0}+30") )); then
+			echo -e "${GREEN}max: $(bc<<<"scale=2;(${ALL_SLOTS:-0}-${NON_SKIPPED_COUNT:-0})*100/${ALL_SLOTS:-1}")%${NOCOLOR}"
+		else
+			echo -e "${RED}max: $(bc<<<"scale=2;(${ALL_SLOTS:-0}-${NON_SKIPPED_COUNT:-0})*100/${ALL_SLOTS:-1}")%${NOCOLOR}"
+		fi`
+		
+		COLOR_REMAINING_SLOTS=`if (( $(bc<<<"scale=0;${REMAINING_SLOTS1:-0} == 0") )); then
+			echo -e "${GREEN}"
+		else
+			echo -e "${YELLOW}"
+		fi`
+		
+		SHORT_SKIP_INFO=`echo "${MIN_POS_SKIP} | ${MAX_POS_SKIP} | cluster ${CLUSTER_SKIP}%->$(bc<<<"scale=2;${CLUSTER_SKIP:-0}+30")% grace | ${COLOR_REMAINING_SLOTS}${REMAINING_SLOTS1:-0} remaining${NOCOLOR}"`
+
+	else
+		SHORT_SKIP_INFO=`echo -e "${LIGHTPURPLE}This node don't have blocks in this epoch${NOCOLOR} | cluster ${CLUSTER_SKIP}%->$(bc<<<"scale=2;${CLUSTER_SKIP:-0}+30")% grace"`
+	fi
+	
+	
+	if (( $(bc<<<"scale=2;${YOUR_SKIPRATE:-0} > ${CLUSTER_SKIP:-0}+30"))); then
+	  echo -e "${RED}Your skiprate: ${YOUR_SKIPRATE:-0}% (Bad) | Done: ${NON_SKIPPED_COUNT:-0}, Skipped: ${SKIPPED_COUNT:-0}${NOCOLOR} | ${SHORT_SKIP_INFO}"
+	elif (( $(bc<<<"scale=2;${YOUR_SKIPRATE:-0} >= ${CLUSTER_SKIP:-0}+20"))); then
+	  echo -e "${YELLOW}Your skiprate: ${YOUR_SKIPRATE:-0}% (Good) | Done: ${NON_SKIPPED_COUNT:-0}, Skipped: ${SKIPPED_COUNT:-0}${NOCOLOR} | ${SHORT_SKIP_INFO}"
+	else
+	  echo -e "${GREEN}Your skiprate: ${YOUR_SKIPRATE:-0}% (Good) | Done: ${NON_SKIPPED_COUNT:-0}, Skipped: ${SKIPPED_COUNT:-0}${NOCOLOR} | ${SHORT_SKIP_INFO}"
+	fi
+	
+	if (( $(bc<<<"scale=2;${COMPLETED_SLOTS1:-0} > 0"))); then
+		LAST_BLOCK_TIME=`echo -e "${SEE_SHEDULE_VAR}" | grep "old<" | tail -n1 | sed 's/old< //g' | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' | awk '{print $2" "$3}'`
+		LAST_BLOCK_STATUS=`echo -e "${THIS_BLOCK_PRODUCTION}" | tail -n2 | tr -s ' ' | sed 's/ /\n\r/g' | sed '/^$/d' | grep -i 'skipped' -c | awk {'if ($1==0) print "DONE"; else print "SKIPPED"'}`
+		COLOR_LAST_BLOCK=`
+			if [[ "${LAST_BLOCK_STATUS}" == "SKIPPED" ]];
+			then
+			  echo "${RED}"
+			else
+			  echo "${GREEN}"
+			fi`
+		LAST_BLOCK_INFO="${COLOR_LAST_BLOCK}${LAST_BLOCK_TIME} ${LAST_BLOCK_STATUS}${NOCOLOR} |"
+	else
+		LAST_BLOCK_INFO=""
+	fi
+
+	if (( $(bc<<<"scale=2;${REMAINING_SLOTS1:-0} > 0"))); then
+		
+		NEXT_SLOT=`echo -e "${SEE_SHEDULE_VAR}" | grep -m1 -A11 "new>" | grep -v "End" | sed -n -e 1p | sed 's/new> //g' | tr -s ' ' | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' | awk '{print $2" "$3}'`
+		NEXT_SLOT_2=`echo -e "${SEE_SHEDULE_VAR}" | grep -m1 -A11 "new>" | grep -v "End" | sed -n -e 5p | sed 's/new> //g' | tr -s ' ' | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' | awk '{print $2" "$3}'`
+		NEXT_SLOT_3=`echo -e "${SEE_SHEDULE_VAR}" | grep -m1 -A11 "new>" | grep -v "End" | sed -n -e 9p | sed 's/new> //g' | tr -s ' ' | sed -r 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' | awk '{print $2" "$3}'`
+		
+		NEXT_SLOT_INFO="${NOCOLOR}next  ${NEXT_SLOT}  ${NEXT_SLOT_2:-}  ${NEXT_SLOT_3:-}${NOCOLOR}"
+	else
+		NEXT_SLOT_INFO="${GREEN}This node will not have new blocks in this epoch${NOCOLOR}"
+	fi
+	
+	
+	echo -e "Block Production: ${LAST_BLOCK_INFO} ${NEXT_SLOT_INFO} ${NOCOLOR}"
+	
+	
+	TESTNET_PERFORMANCE=`echo "${KYC_API_VERCEL}" | jq -r '.data[0].tn_calculated_stats.num_bonus_last_10'`
+	COLOR_TESTNET_PERFORMANCE=`
+		if (( $(bc<<<"scale=0;${TESTNET_PERFORMANCE:-0} >= 8") )); then
+		  echo "${GREEN}"
+		elif (( $(bc<<<"scale=0;${TESTNET_PERFORMANCE:-0} >= 5") )); then
+		  echo "${YELLOW}"
+		else
+		  echo "${RED}"
+		fi`
+		
+	if [[ "${TESTNET_PERFORMANCE}" != "null" ]] ; then
+		echo -e "Current Testnet Performance: ${COLOR_TESTNET_PERFORMANCE}${TESTNET_PERFORMANCE}/10 ${NOCOLOR}"
+	fi
+	
+	
+	METRICS_SUMMARY_TRUE_FALSE=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.self_reported_metrics_summary.pass'`
+	METRICS_SUMMARY_RAW=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.self_reported_metrics_summary.reason'`
+	COLOR_METRICS=`if [[ "${METRICS_SUMMARY_TRUE_FALSE}" == "true" ]];
+			then
+				if [[ $METRICS_SUMMARY_RAW == *"10/10"* ]];
+				then
+					echo "${GREEN}"
+				else
+					echo "${YELLOW}"
+				fi
+			else
+			  echo "${RED}"
+			fi`
+	METRICS_SUMMARY=`echo "${COLOR_METRICS}"``echo "${METRICS_SUMMARY_RAW}"``echo "${NOCOLOR}"`
+	
+	if [[ "${METRICS_SUMMARY_RAW}" != "null" ]] ; then
+		echo -e "Metrics: ${METRICS_SUMMARY}"
+	fi
+
+	
+OPTIMISTIC_ARR[6]=`Optimistic_Slot_Now 5`
+	
+	GL_COLOR_OPT_SLOT=`echo "${RED}"`
+	GL_TEXT_OPT_SLOT=`echo "${RED}Optimistic Slot Outdated!${NOCOLOR}"`
+	first_elem=`echo "${OPTIMISTIC_ARR[0]}" | awk '{print $1}'`
+	last_elem=`echo "${OPTIMISTIC_ARR[-1]}" | awk '{print $1}'`
+	
+	for ix in ${!OPTIMISTIC_ARR[*]}
+	do
+		this_elem=`echo "${OPTIMISTIC_ARR[$ix]}" | awk '{print $1}'`
+		if [[ "${this_elem}" != "null" ]];
+		then
+			if [[ "${this_elem}" != "${first_elem}" ]];
+			then
+				GL_COLOR_OPT_SLOT=`echo "${GREEN}"`
+				GL_TEXT_OPT_SLOT=`echo "${GREEN}Optimistic Slot OK!${NOCOLOR}"`
+			fi
+		fi
+	done
+	
+	if [[ "${OPTIMISTIC_ARR[0]}" != "null" ]];
+	then
+		if [[ "${OPTIMISTIC_ARR[-1]}" != "null" ]];
+		then
+			echo -e "Optimistic Slots: ${GL_COLOR_OPT_SLOT}${first_elem}${NOCOLOR}-${GL_COLOR_OPT_SLOT}${last_elem}${NOCOLOR} | ${GL_TEXT_OPT_SLOT}"
+		fi
+	fi
+	
+	if [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+		
+		#LAST_REWARDS_RAW=$(solana -um vote-account --with-rewards --num-rewards-epochs 1 ${YOUR_VOTE_ACCOUNT} 2>&1)
+		#while [[ $? != 0 ]]; do
+		#	LAST_REWARDS_RAW=$(solana -um vote-account --with-rewards --num-rewards-epochs 1 ${YOUR_VOTE_ACCOUNT} 2>&1)
+		#done
+		#
+		#LAST_REWARDS=`echo -e "${LAST_REWARDS_RAW}" | grep -m1 -A1 "Reward Slot" | grep -v "Reward" | sed -n -e 1p | awk '{print "Epoch "$1" - "$3}'`
+		#
+		#echo -e "Last Reward: ${LAST_REWARDS:-${LIGHTPURPLE}Cannot see rewards now ${NOCOLOR}}"
+		
+		
+		LAST_REWARDS_RAW_JSON=$(solana -um vote-account --with-rewards --num-rewards-epochs 1 --output json ${YOUR_VOTE_ACCOUNT} 2>/dev/null | jq -r '.epochRewards[]' 2>/dev/null)
+		#while [[ $? != 0 ]]; do
+		#	LAST_REWARDS_RAW_JSON=$(solana -um vote-account --with-rewards --num-rewards-epochs 1 --output json ${YOUR_VOTE_ACCOUNT} 2>/dev/null | jq -r '.epochRewards[]' 2>/dev/null)
+		#done
+		while [[ -z $LAST_REWARDS_RAW_JSON ]]; do
+			LAST_REWARDS_RAW_JSON=$(solana -um vote-account --with-rewards --num-rewards-epochs 1 --output json ${YOUR_VOTE_ACCOUNT} 2>/dev/null | jq -r '.epochRewards[]' 2>/dev/null)
+			#sleep 1  # Пауза між спробами (можна змінити за необхідністю)
+		done
+																																	 # 2>&1
+		LAST_REWARDS_RAW_JSON_EPOCHS=(`echo -e "${LAST_REWARDS_RAW_JSON}" | jq -r '.epoch'`)
+		LAST_REWARDS_RAW_JSON_AMOUNT=(`echo -e "${LAST_REWARDS_RAW_JSON}" | jq -r '.amount' | awk '{print ($1/(1000000000))}' | bc`)
+		
+		for((t=0;t<${#LAST_REWARDS_RAW_JSON_EPOCHS[@]};t++)); do
+			LAST_REWARDS_JSON+=`echo -ne "Epoch ${LAST_REWARDS_RAW_JSON_EPOCHS[t]} - ${LAST_REWARDS_RAW_JSON_AMOUNT[t]} "`
+			#LAST_REWARDS_JSON+="\n"
+		done
+		
+		echo -e "Last Reward: ${LAST_REWARDS_JSON:-${LIGHTPURPLE}Cannot see rewards now ${NOCOLOR}}"
+		
+	fi
+	
+	
+	if [[ ${GRAFANA_HOST_NAME} != "null" ]]; then
+		echo -e `Graphana_hardware_info 102`" | "`Graphana_hardware_info 139`" | "`Graphana_hardware_info 73`" | "`Graphana_hardware_info 67`" | "`Graphana_hardware_info 108`" | "`Graphana_hardware_info 118`" | "`Graphana_hardware_info 111`
+	fi
+	
+	
+	CONCENTRATION=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.data_center_stake_percent' | awk '{printf("%.2f\n",$1)}'`
+	
+	MAX_CONCENTRATION=`
+		if [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+			echo "10.00"
+		else
+			echo "25.00"
+		fi`
+	DC_COLOR=`
+		if (( $(bc<<<"scale=2;${CONCENTRATION} < ${MAX_CONCENTRATION}") )); then
+		  echo "${GREEN}"
+		else
+		  echo "${YELLOW}"
+		fi`
+	
+	CURRENT_DC=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.epoch_data_center.asn'`'-'`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.epoch_data_center.location'`' | '`echo "${DC_COLOR}${CONCENTRATION}"`'%'`echo "${NOCOLOR}"`' concentration'
+	
+	if [[ "$(echo "${KYC_API_VERCEL_2}" | jq -r '.stats.epoch_data_center.asn')" != "null" ]] ; then
+		echo -e "Datacenter: ${CURRENT_DC}"
+	fi
+	
+	
+	CURRENT_STAKE_STATE=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.state'`
+	CURRENT_STAKE_REASON=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.state_reason'`
+	COLOR_STAKE_STATE=`
+		if [[ "${CURRENT_STAKE_STATE}" == "Bonus" ]];
+		then
+		  echo "${GREEN}"
+		elif [[ "${CURRENT_STAKE_STATE}" == "Baseline" ]];
+		then
+		  echo "${YELLOW}"
+		else
+		  echo "${RED}"
+		fi`
+	CURRENT_STAKE_ACTION=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.state_action'`
+	
+	if [[ "${CURRENT_STAKE_STATE}" != "null" ]] ; then
+		echo -e "Last Epoch State: ${COLOR_STAKE_STATE}${CURRENT_STAKE_STATE}: ${CURRENT_STAKE_REASON}${NOCOLOR}"
+	fi
+	if [[ "${CURRENT_STAKE_ACTION}" != "null" ]] ; then
+		echo -e "Last Bot Stake Action: In epoch ${LAST_EPOCH} ${CURRENT_STAKE_ACTION}${NOCOLOR}"
+	fi
+	
+	if [[ "${STAKE_SHOW_TYPE}" == "false" ]]; then
+		Node_Stake_4 | grep -A2 "Stake Total: Active"
+	else
+		Node_Stake_AllStakers_4
+	fi
+	
+}
+
+
+if [[ "${FLAG_ONLY_IMPORTANT}" == "false" ]]; then
+
+	Time_Now_1
+echo -e "${GREEN}Solana Price: ${NOCOLOR}"`solana_price`
+
+	Epoch_Progress_2
+	#SOLANA_CLUSTER=$(rotateKnownRPC "${SOLANA_CLUSTER}")
+	#SOLANA_CLUSTER=$(rotateKnownRPC "${SOLANA_CLUSTER}")
+OPTIMISTIC_ARR[5]=`Optimistic_Slot_Now`
+	This_Node_3
+	
+	if [[ "${STAKE_SHOW_TYPE}" == "false" ]]; then
+		Node_Stake_4
+	else
+		echo -e "${CYAN}"
+		echo -e "Current Stake ${NOCOLOR}"
+		CURRENT_STAKE_ACTION=`echo "${KYC_API_VERCEL_2}" | jq -r '.stats.state_action'`
+		echo -e "${LIGHTPURPLE}Last Bot Stake Action:${NOCOLOR} In epoch ${LAST_EPOCH} ${CURRENT_STAKE_ACTION}${NOCOLOR}"
+		Node_Stake_AllStakers_4
+	fi
+	
+OPTIMISTIC_ARR[6]=`Optimistic_Slot_Now`
+	SFDP_5
+OPTIMISTIC_ARR[7]=`Optimistic_Slot_Now`
+	Vote_Credits_6
+	Skiprate_7
+OPTIMISTIC_ARR[8]=`Optimistic_Slot_Now`
+	Optimistic_Slot_Summary
+	if [[ ${GRAFANA_HOST_NAME} != "null" ]]; then
+		echo -e "${CYAN}"
+		echo -e "Hardware Info: ${NOCOLOR}"
+		echo -e `Graphana_hardware_info 102`
+		echo -e `Graphana_hardware_info 139`
+		echo -e `Graphana_hardware_info 73`
+		echo -e `Graphana_hardware_info 67`
+		echo -e `Graphana_hardware_info 108`
+		echo -e `Graphana_hardware_info 118`
+		echo -e `Graphana_hardware_info 111`
+	fi
+	if [[ "${CLUSTER_NAME}" == "(Mainnet)" ]]; then
+	Last_Rewards_8
+	fi
+
+	else
+	
+	Time_Now_1
+	
+	#SOLANA_CLUSTER=$(rotateKnownRPC "${SOLANA_CLUSTER}")
+	#SOLANA_CLUSTER=$(rotateKnownRPC "${SOLANA_CLUSTER}")
+	
+	Only_Important
+
+	
+
+fi
+
+echo -e "${NOCOLOR}"
+
+popd > /dev/null || exit 1
