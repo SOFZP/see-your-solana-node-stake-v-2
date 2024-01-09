@@ -11,7 +11,9 @@ Now you can see MarinadeNative Stakes & Sorting your Stakes
 `./CVK-see-your-stake_v2.bash`
 
 or add ANY identity + cluster (-um OR -ut) + sorting (ColumnNumber:Order)
+
 `./CVK-see-your-stake.bash <NODE_IDENTITY> <-um OR -ut> <ColNum:ASC_or_DESC>`
+
 
 for example `./CVK-see-your-stake.bash <NODE_IDENTITY> -um 4:DESC 6:DESC`
 
